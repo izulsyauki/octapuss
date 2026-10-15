@@ -43,6 +43,20 @@ enum CursorImportChecks {
         precondition(bitmap.colorAt(x: 0, y: 0)!.alphaComponent < 0.01, "DIB transparency must survive import")
         precondition(bitmap.colorAt(x: 1, y: 0)!.alphaComponent > 0.99)
 
+        // Valid 8-bit DIBs may store fewer than 256 RGBQUAD palette entries.
+        var indexedHeader = header
+        indexedHeader.replaceSubrange(14..<16, with: le(8, 2))
+        indexedHeader.replaceSubrange(20..<24, with: le(320, 4))
+        indexedHeader.replaceSubrange(32..<36, with: le(2, 4))
+        let indexedPalette: [UInt8] = [0, 0, 0, 0, 160, 20, 240, 0]
+        let indexedPixels = Array(repeating: UInt8(1), count: 256)
+        let indexedCUR = cur(indexedHeader + indexedPalette + indexedPixels + mask, width: 16, height: 16, x: 1, y: 2)
+        let indexed = try CursorFileDecoder.decode(data: indexedCUR, name: "Partial palette")
+        let indexedBitmap = NSBitmapImageRep(data: indexed.png)!
+        precondition(indexedBitmap.colorAt(x: 0, y: 0)!.alphaComponent < 0.01)
+        precondition(indexedBitmap.colorAt(x: 1, y: 0)!.alphaComponent > 0.99,
+                     "A partial 8-bit palette must not decode as fully transparent")
+
         let frames = chunk("LIST", Array("fram".utf8) + chunk("icon", Array(dibCursor)) + chunk("icon", Array(pngCursor)))
         let body = Array("ACON".utf8) + chunk("seq ", le(1, 4)) + frames
         let ani = Data(Array("RIFF".utf8) + le(body.count, 4) + body)

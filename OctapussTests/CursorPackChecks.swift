@@ -170,6 +170,20 @@ enum CursorPackChecks {
                 .filter { ["cur", "ani"].contains($0.pathExtension.lowercased()) }
             let imported = try files.map { try CursorFileDecoder.decode(url: $0) }
             precondition(imported.count == 15 && imported.allSatisfy { $0.effectiveRole != nil })
+            for cursor in imported.filter({ $0.effectiveRole == .busy || $0.effectiveRole == .working }) {
+                for frame in cursor.animation!.frames {
+                    let bitmap = NSBitmapImageRep(data: frame)!
+                    let visible = (0..<bitmap.pixelsHigh).contains { y in
+                        (0..<bitmap.pixelsWide).contains { x in bitmap.colorAt(x: x, y: y)!.alphaComponent > 0.01 }
+                    }
+                    precondition(visible, "\(cursor.name) animation frames must contain visible pixels")
+                }
+                if let directory = ProcessInfo.processInfo.environment["OCTAPUSS_GOKU_FRAME_DIR"] {
+                    let folder = URL(fileURLWithPath: directory)
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try cursor.png.write(to: folder.appendingPathComponent("\(cursor.effectiveRole!.rawValue).png"))
+                }
+            }
             let plan = CursorPackPlan(cursors: imported)
             precondition(plan.mapped.count == 13 && plan.unmapped.count == 2)
             let slots = Set(plan.mapped.flatMap(\.targetSlotNames))

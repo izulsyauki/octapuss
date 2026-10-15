@@ -231,6 +231,23 @@ enum CursorFileDecoder {
             let length = u32(entry + 8), offset = u32(entry + 12)
             guard x < width, y < height, length > 0, offset >= 6 + count * 16,
                   offset <= bytes.count, length <= bytes.count - offset else { throw malformed() }
+            var payload = Array(bytes[offset..<(offset + length)])
+            var expandedPalette = false
+            // ImageIO's ICO decoder misreads 8-bit DIBs with a short RGBQUAD
+            // table. Expand only unused palette entries; retain every pixel,
+            // the AND transparency mask, and the cursor's hotspot unchanged.
+            if length >= 40, u32(offset) == 40, u16(offset + 14) == 8, u32(offset + 16) == 0 {
+                let colors = u32(offset + 32)
+                if colors > 0 && colors < 256 {
+                    let paletteEnd = 40 + colors * 4
+                    let pixelStride = ((width + 3) / 4) * 4
+                    let maskStride = ((width + 31) / 32) * 4
+                    guard length >= paletteEnd + (pixelStride + maskStride) * height else { throw malformed() }
+                    payload.insert(contentsOf: Array(repeating: UInt8(0), count: (256 - colors) * 4), at: paletteEnd)
+                    payload.replaceSubrange(32..<36, with: [0, 1, 0, 0]) // biClrUsed = 256
+                    expandedPalette = true
+                }
+            }
             // ImageIO decodes ICO payloads, including palette/DIB masks and PNG images.
             // Rebuild a single-entry ICO; CUR's hotspot fields are not ICO planes/depth.
             var ico: [UInt8] = [0, 0, 1, 0, 1, 0]
@@ -240,8 +257,10 @@ enum CursorFileDecoder {
                 ico[12] = bytes[offset + 14]; ico[13] = bytes[offset + 15]
                 if ico[12] < 8 { ico[8] = UInt8(1 << Int(ico[12])) }
             }
+            if expandedPalette { ico[8] = 0 } // ICO directory: zero means 256 colors.
+            for index in 0..<4 { ico[14 + index] = UInt8(truncatingIfNeeded: payload.count >> (index * 8)) }
             ico[18] = 22; ico[19] = 0; ico[20] = 0; ico[21] = 0
-            ico += bytes[offset..<(offset + length)]
+            ico += payload
             candidates.append((width, height, x, y, Data(ico)))
         }
         for candidate in candidates.sorted(by: { $0.0 * $0.1 > $1.0 * $1.1 }) {
