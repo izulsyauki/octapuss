@@ -1,7 +1,7 @@
 <!-- Hallmark implementation self-critique: Philosophy 5 · Hierarchy 5 · Execution 4 · Specificity 5 · Restraint 4 · Variety 4. -->
 # Octapuss design direction
 
-Phase 0 implements this direction as a native SwiftUI/AppKit app-local pointer playground. App-local customization is the selected product scope; across-app experiments have been removed from the executable. Preserve the existing visual identity and tokens during behavioral repairs.
+Phase 0 implements this direction as a native SwiftUI/AppKit pointer playground with an independent, experimental system-arrow backend. The 15 October 2026 scope extension adds explicit system application while preserving the existing visual identity and tokens. See `docs/SYSTEM_CURSOR.md` for backend boundaries and host evidence.
 
 ## Direction
 
@@ -28,7 +28,7 @@ Pointer pals          Pointer playground        Light / Dark
                       Test background: Light / Dark
 
                       Size: Small / Medium / Large
-                      [Restore system pointer]   Compatibility
+                      [Apply system arrow] [Restore system pointer]
 ```
 
 This is a content schematic, not a screenshot. The preview should dominate the window; the short preset list needs no full application sidebar. At the minimum size, retain a usable preview and allow settings content to scroll. Do not crop actions or depend on a fixed screenshot layout.
@@ -77,24 +77,29 @@ Spacing follows a 4 pt scale: 8 pt related controls, 12 pt control groups, 16 pt
 | --- | --- | --- |
 | Preview active | App-local preview active | Restore system pointer |
 | Preview paused | System pointer · preview paused | Resume preview |
+| System arrow applied | System arrow: actual applied preset · size | Restore system pointer |
+| Pointer colors overridden | Pointer color override | Open System Settings; Reset Colors, then Apply |
+| Recovery incomplete | System restoration needed | Restore system pointer |
 
-The current app starts with the local preview active. This mode is runtime state, not a saved enable preference. There is no global engine, companion panel, cursor hiding, or permission flow in the executable.
+The current app starts with the local preview active and attempts recovery of any saved system session before further application. Preview mode is runtime state, not a saved enable preference. The system backend uses native arrow registrations and a temporary recovery subprocess; no cursor hiding or permission flow is introduced.
 
-Keep the app-local scope visible beside status; offer no global action.
+Apply system arrow is an explicit primary action. It changes registered macOS arrow slots; text, hand, resize, app-drawn, and protected cursors can differ. Keep local preview behavior independent of that action. Status records the preset and size actually applied, so changing the selection does not relabel the active system arrow. Recovery and pointer-color warnings take precedence over applied status.
 
-Preset and size changes update the preview immediately without resuming a paused preview. Style, size, and Light/Dark background persist across relaunch. Boop increments the visible click count and updates diagnostic text; the count resets on relaunch.
+Preset and size changes update the preview immediately without resuming a paused preview or applying another system arrow. Style, size, and Light/Dark background persist across relaunch. Boop increments the visible click count and updates diagnostic text; the count resets on relaunch.
 
-Restore pauses the custom cursor inside the playground and preserves selected preferences. The system pointer is used there until Resume preview is chosen. Reset preferences is a separate Settings action and preserves the paused state. Quit restores the pointer before exiting.
+Restore restores the saved system baseline, pauses the custom cursor inside the playground, and preserves selected preferences. The system pointer is used there until Resume preview is chosen. Reset preferences is a separate Settings action and preserves preview mode. Quit restores the pointer before exiting; an incomplete restoration retains recovery status and prevents ordinary Quit.
+
+Custom macOS pointer outline/fill colors block Apply before registration. Explain System Settings → Accessibility → Display → Pointer → Reset Colors, then Apply again; Settings offers Open System Settings. Octapuss does not reset those colors itself.
 
 Restore is idempotent and remains reachable from the main window, Settings, app menu, and menu bar.
 
 ## Onboarding and menu bar
 
-First launch opens the usable local preview. Explain the pointer scope in one sentence. No global permission is needed.
+First launch opens the usable local preview. Explain that system-arrow application is explicit and can affect other apps. No global permission is needed.
 
-The menu bar contains status, Open Octapuss, preset selection, Restore system pointer / Resume preview, Settings, and Quit. Closing the customization window keeps the menu-bar utility running.
+The menu bar contains status, Open Octapuss, preset selection, Apply system arrow, Restore system pointer, Resume local preview when paused, Settings, and Quit. Closing the customization window keeps the menu-bar utility running.
 
-Settings (`⌘,`) contains scope, shared preview status and Restore/Resume, privacy, and reset preferences. Launch at login remains deferred. Diagnostics report local preview actions without collecting browsing or typing activity.
+Settings (`⌘,`) contains system scope and applied status, Apply/Restore, pointer-color guidance when needed, preview Restore/Resume, privacy, and reset preferences. Launch at login remains deferred. Diagnostics report preview and system actions without collecting browsing or typing activity.
 
 ## Accessibility and motion
 
@@ -103,3 +108,5 @@ Support keyboard navigation, VoiceOver names, visible focus, text status, reduce
 Version one uses static pointers. Native control feedback may take roughly 150–200 ms; skip trails, wobble, looping mascot animation, and launch choreography.
 
 Implementation review must inspect light/dark appearances at minimum/default window sizes, all runtime states, actual-size pointer edges, and keyboard/VoiceOver operation. No rendered accessibility or contrast pass is claimed by this proposal.
+
+The final system-arrow UI could not be recaptured because the Mac was locked. Visual acceptance of these behavioral additions is blocked, not passed; existing visual identity and tokens remain the reference.

@@ -21,9 +21,7 @@ if [[ ! -d "$sdk_path" ]]; then
     sdk_path="$(xcrun --sdk macosx --show-sdk-path)"
 fi
 
-mkdir -p "$contents_path/MacOS"
 mkdir -p "$module_cache"
-cp "$project_root/Phase0/Info.plist" "$contents_path/Info.plist"
 
 architecture="$(uname -m)"
 case "$architecture" in
@@ -40,11 +38,37 @@ if [[ "${1:-}" == "--check" ]]; then
         -module-cache-path "$module_cache" \
         -framework AppKit -framework SwiftUI \
         "$project_root/Phase0/OctapussProof.swift" \
+        "$project_root/Phase0/SystemCursorBackend.swift" \
         "$project_root/OctapussTests/RegressionChecks.swift" \
         -o "$module_cache/RegressionChecks"
     "$module_cache/RegressionChecks"
     exit
 fi
+
+if [[ "${1:-}" == "--probe-system" ]]; then
+    xcrun swiftc -parse-as-library -target "$architecture-apple-macos14.0" -sdk "$sdk_path" \
+        -module-cache-path "$module_cache" -framework AppKit \
+        "$project_root/Phase0/SystemCursorBackend.swift" \
+        "$project_root/OctapussTests/SystemCursorProbe.swift" \
+        -o "$module_cache/SystemCursorProbe"
+    "$module_cache/SystemCursorProbe"
+    exit
+fi
+
+if [[ "${1:-}" == "--check-system-live" ]]; then
+    xcrun swiftc -parse-as-library -D OCTAPUSS_CHECKS \
+        -target "$architecture-apple-macos14.0" -sdk "$sdk_path" \
+        -module-cache-path "$module_cache" -framework AppKit -framework SwiftUI \
+        "$project_root/Phase0/OctapussProof.swift" \
+        "$project_root/Phase0/SystemCursorBackend.swift" \
+        "$project_root/OctapussTests/SystemCursorLiveCheck.swift" \
+        -o "$module_cache/SystemCursorLiveCheck"
+    "$module_cache/SystemCursorLiveCheck"
+    exit
+fi
+
+mkdir -p "$contents_path/MacOS"
+cp "$project_root/Phase0/Info.plist" "$contents_path/Info.plist"
 
 CLANG_MODULE_CACHE_PATH="$module_cache" \
 SWIFT_MODULECACHE_PATH="$module_cache" \
@@ -55,6 +79,7 @@ xcrun swiftc \
     -framework AppKit \
     -framework SwiftUI \
     "$project_root/Phase0/OctapussProof.swift" \
+    "$project_root/Phase0/SystemCursorBackend.swift" \
     -o "$executable_path"
 
 codesign --force --sign - --timestamp=none "$app_path"

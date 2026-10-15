@@ -12,7 +12,7 @@ Mac owners who enjoy desktop personalization and want a friendly, low-friction w
 
 ## Product Purpose
 
-Octapuss makes app-local pointer customization playful, precise, and easy to reverse. Success means a user can choose a style, verify its real hotspot on ordinary controls, and return to the system pointer without granting unrelated permissions.
+Octapuss makes pointer customization playful, precise, and easy to reverse. On 15 October 2026 the user changed the requested scope to native system customization. The first system backend targets registered macOS arrow cursors while keeping the independent app-local preview.
 
 ## Positioning
 
@@ -21,7 +21,7 @@ Octapuss combines a real AppKit cursor preview with an original cat-and-octopus 
 ## Operating Context
 
 - A native macOS utility with a main customization window, Settings, and menu-bar access.
-- The first supported scope is **app-local customization inside Octapuss**.
+- The requested scope is **system arrow customization outside Octapuss**, with an explicit Apply action. The local playground remains independent.
 - The preview includes light and dark test surfaces, text, and a normal button for visual and click-position checks.
 - The app launches with across-app effects off and keeps Restore available.
 
@@ -31,7 +31,8 @@ Octapuss combines a real AppKit cursor preview with an original cat-and-octopus 
 - Small, Medium, and Large sizes with a hotspot that scales with the artwork.
 - App-local cursor rectangles use public AppKit APIs.
 - Across-app companion and cursor-hiding experiments have been removed from the app-local executable. Their historical findings remain in the feasibility report.
-- System-wide cursor replacement is not established and must never be claimed.
+- The experimental native backend uses dynamically resolved private cursor-registration APIs. It targets Arrow and, on macOS 26, ArrowS. Text, link-hand, resize, application-drawn, and protected cursors are outside this first theme's replacement scope.
+- Baseline backup, verified restoration, partial-failure rollback, and crash recovery are release requirements. Availability and registration success must be distinguished from human-visible cross-app verification.
 - Store only selected appearance preferences. Do not collect pointer history, typing, screenshots, clicked content, or application activity.
 - Use SwiftUI for the interface and AppKit at native cursor boundaries. The current proof builds with Command Line Tools; a full Xcode project remains future work.
 - Animated pointers, trails, sound, import/export, editing, per-app rules, accounts, cloud sync, and automatic global cursor-role detection are deferred.
@@ -54,7 +55,7 @@ Octapuss combines a real AppKit cursor preview with an original cat-and-octopus 
 
 ## Product Principles
 
-1. **Truth before magic.** Name app-local preview and experimental behavior exactly as implemented.
+1. **Truth before magic.** Distinguish local preview, applied system-arrow registrations, and verified visible behavior. Do not promise every cursor in every application.
 2. **The tip stays trustworthy.** Decoration grows away from the click point, and every size preserves hotspot alignment.
 3. **Joy supports the task.** Character appears in selection, preview, first use, and recovery without replacing standard controls.
 4. **Restoration is a feature.** Restore and Quit must unwind every effect owned by Octapuss.

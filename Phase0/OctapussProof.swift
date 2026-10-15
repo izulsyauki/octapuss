@@ -79,6 +79,7 @@ enum PointerSize: String, CaseIterable, Identifiable {
 @MainActor
 final class ProofStore: ObservableObject {
     private let defaults: UserDefaults
+    private let allowsSystemCustomization: Bool
 
     @Published var pack: PointerPack {
         didSet { defaults.set(pack.rawValue, forKey: "selectedPack") }
@@ -95,16 +96,81 @@ final class ProofStore: ObservableObject {
     @Published private(set) var previewEnabled = true
     @Published private(set) var clickCount = 0
     @Published private(set) var diagnostic = "Custom cursor inside the playground only."
+    @Published private(set) var systemApplied = false
+    @Published private(set) var systemAppliedLabel = ""
+    @Published private(set) var systemNeedsRecovery = false
+    @Published private(set) var systemColorOverride = false
+    private var systemSession: SystemCursorSession?
+    private var recoveredOnLaunch = false
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, allowsSystemCustomization: Bool = true) {
         self.defaults = defaults
+        self.allowsSystemCustomization = allowsSystemCustomization
         pack = PointerPack(rawValue: defaults.string(forKey: "selectedPack") ?? "") ?? .ink
         pointerSize = PointerSize(rawValue: defaults.string(forKey: "pointerSize") ?? "") ?? .medium
         darkPreview = defaults.bool(forKey: "darkPreview")
+        systemColorOverride = allowsSystemCustomization && PointerColorCompatibility.hasOverride()
+        if systemColorOverride {
+            diagnostic = "macOS pointer colors override themes. In System Settings > Accessibility > Display > Pointer, choose Reset Colors, then Apply."
+        }
     }
 
     var statusTitle: String {
-        previewEnabled ? "App-local preview active" : "System pointer · preview paused"
+        if systemNeedsRecovery { return "System restoration needed" }
+        if systemColorOverride { return "Pointer color override" }
+        if systemApplied { return "System arrow: \(systemAppliedLabel)" }
+        return previewEnabled ? "App-local preview active" : "System pointer · preview paused"
+    }
+
+    func recoverSystemPointerIfNeeded() {
+        guard allowsSystemCustomization else { return }
+        guard !recoveredOnLaunch else { return }
+        recoveredOnLaunch = true
+        guard FileManager.default.fileExists(atPath: SystemCursorSession.defaultJournalURL.path) else { return }
+        restore()
+    }
+
+    func applySystemArrow() {
+        guard allowsSystemCustomization else { return }
+        systemColorOverride = PointerColorCompatibility.hasOverride()
+        guard !systemColorOverride else {
+            diagnostic = "macOS pointer colors override themes. In System Settings > Accessibility > Display > Pointer, choose Reset Colors, then Apply."
+            return
+        }
+        do {
+            if systemSession == nil { systemSession = try SystemCursorSession(api: SystemCursorAPI()) }
+            guard let session = systemSession else { return }
+            if session.hasPendingRecovery { try session.restore() }
+            systemApplied = false
+            let names = ["com.apple.coregraphics.Arrow", "com.apple.coregraphics.ArrowS"]
+            var replacements: [CursorSnapshot] = []
+            for name in names {
+                // ArrowS is required on the host macOS 26. Older systems may omit it.
+                if name.hasSuffix("ArrowS"), ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 {
+                    continue
+                }
+                let images = try [1.0, 2.0, 5.0, 10.0].map { scale -> Data in
+                    let image = PointerArtwork.pointerImage(pack: pack, size: pointerSize.points * scale)
+                    guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+                          let png = NSBitmapImageRep(cgImage: cgImage).representation(using: .png, properties: [:]) else {
+                        throw CursorSystemError.invalidBaseline
+                    }
+                    return png
+                }
+                replacements.append(CursorSnapshot(name: name, width: pointerSize.points, height: pointerSize.points,
+                                                   x: pointerSize.points / 16, y: pointerSize.points / 16,
+                                                   frames: 1, duration: 0, images: images))
+            }
+            try session.apply(replacements)
+            systemApplied = true
+            previewEnabled = true
+            systemAppliedLabel = "\(pack.title) · \(pointerSize.title)"
+            systemNeedsRecovery = false
+            diagnostic = "System arrow applied. Text, hand, and resize cursors stay native."
+        } catch {
+            systemNeedsRecovery = systemSession?.hasPendingRecovery ?? false
+            diagnostic = error.localizedDescription
+        }
     }
 
     func recordClick() {
@@ -115,7 +181,19 @@ final class ProofStore: ObservableObject {
     func restore() {
         previewEnabled = false
         NSCursor.arrow.set()
-        diagnostic = "System pointer restored, including inside the playground."
+        do {
+            if allowsSystemCustomization, systemSession == nil,
+               FileManager.default.fileExists(atPath: SystemCursorSession.defaultJournalURL.path) {
+                systemSession = try SystemCursorSession(api: SystemCursorAPI())
+            }
+            try systemSession?.restore()
+            systemApplied = false
+            systemNeedsRecovery = false
+            diagnostic = "System pointer restored, including inside the playground."
+        } catch {
+            systemNeedsRecovery = true
+            diagnostic = "Restoration incomplete: \(error.localizedDescription)"
+        }
     }
 
     func resumePreview() {
@@ -133,7 +211,7 @@ final class ProofStore: ObservableObject {
 
     func prepareToQuit() -> Bool {
         restore()
-        return true
+        return !systemNeedsRecovery
     }
 }
 
@@ -383,13 +461,14 @@ struct OctapussMascot: View {
 
 struct ScopeBadge: View {
     let enabled: Bool
+    let title: String
 
     var body: some View {
         HStack(spacing: 7) {
             Circle()
                 .fill(Color(nsColor: enabled ? AppPalette.tide : AppPalette.sunshine))
                 .frame(width: 8, height: 8)
-            Text(enabled ? "App-local preview active" : "Preview paused")
+            Text(title)
                 .font(.system(size: 11, weight: .semibold))
         }
         .padding(.horizontal, 11)
@@ -458,7 +537,7 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                ScopeBadge(enabled: store.previewEnabled)
+                ScopeBadge(enabled: store.systemApplied || store.previewEnabled, title: store.statusTitle)
             }
 
             HStack(alignment: .top, spacing: 24) {
@@ -516,7 +595,10 @@ struct ContentView: View {
 
             Divider()
 
+            VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
+                Button("Apply system arrow") { store.applySystemArrow() }
+                    .buttonStyle(.borderedProminent)
                 Button("Restore system pointer") { store.restore() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 if !store.previewEnabled {
@@ -524,15 +606,16 @@ struct ContentView: View {
                 }
                 Button("Settings…") { openSettings() }
                 Spacer()
+            }
                 HStack(spacing: 7) {
                     Image(systemName: "heart.fill")
                         .foregroundStyle(Color(nsColor: AppPalette.blush))
                     Text(store.diagnostic)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
+                        .multilineTextAlignment(.leading)
                 }
-                .frame(maxWidth: 330, alignment: .trailing)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(24)
@@ -548,11 +631,19 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Octapuss scope") {
-                Label("App-local pointer customization", systemImage: "checkmark.seal.fill")
+            Section("System customization") {
+                Label(store.statusTitle, systemImage: "cursorarrow")
                     .foregroundStyle(Color(nsColor: AppPalette.tide))
-                Text("The pointer changes only inside the labeled playground. No global permission is needed.")
+                Text("Apply system arrow changes the registered macOS arrow, including outside Octapuss. App-drawn and protected cursors can differ. Text, hand, and resize cursors remain native.")
                     .foregroundStyle(.secondary)
+                Button("Apply selected system arrow") { store.applySystemArrow() }
+                Button("Restore system pointer") { store.restore() }
+                if store.systemColorOverride {
+                    Text("Your custom macOS pointer colors override registered themes. Choose Accessibility > Display > Pointer > Reset Colors in System Settings, then Apply again.")
+                    Button("Open System Settings…") {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
+                    }
+                }
             }
             Section("Preview") {
                 Text(store.statusTitle)
@@ -608,7 +699,6 @@ final class ProofAppDelegate: NSObject, NSApplicationDelegate {
 }
 
 #if !OCTAPUSS_CHECKS
-@main
 struct OctapussProofApp: App {
     @NSApplicationDelegateAdaptor(ProofAppDelegate.self) private var appDelegate
     @StateObject private var store = ProofStore()
@@ -621,6 +711,13 @@ struct OctapussProofApp: App {
                 .environmentObject(store)
                 .onAppear {
                     appDelegate.store = store
+                    store.recoverSystemPointerIfNeeded()
+                }
+                .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.willSleepNotification)) { _ in
+                    store.restore()
+                }
+                .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.sessionDidResignActiveNotification)) { _ in
+                    store.restore()
                 }
         }
         .defaultSize(width: 840, height: 560)
@@ -632,6 +729,7 @@ struct OctapussProofApp: App {
             Text(store.statusTitle)
             Divider()
             Button("Open Octapuss") { openWindow(id: "main") }
+            Button("Apply system arrow") { store.applySystemArrow() }
             Menu("Pointer pal") {
                 ForEach(PointerPack.allCases) { pack in
                     Button {
@@ -646,8 +744,9 @@ struct OctapussProofApp: App {
                     }
                 }
             }
-            Button(store.previewEnabled ? "Restore system pointer" : "Resume preview") {
-                if store.previewEnabled { store.restore() } else { store.resumePreview() }
+            Button("Restore system pointer") { store.restore() }
+            if !store.previewEnabled {
+                Button("Resume local preview") { store.resumePreview() }
             }
             Divider()
             Button("Settings…") { openSettings() }
@@ -666,4 +765,18 @@ struct OctapussProofApp: App {
     }
 }
 
+@main
+enum OctapussEntry {
+    @MainActor
+    static func main() {
+        if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--cursor-read-many" {
+            exit(SystemCursorAPI.runReader(names: CommandLine.arguments[2]))
+        }
+        if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "--cursor-watchdog",
+           let sessionID = UUID(uuidString: CommandLine.arguments[3]) {
+            exit(SystemCursorSession.runWatchdog(path: CommandLine.arguments[2], sessionID: sessionID))
+        }
+        OctapussProofApp.main()
+    }
+}
 #endif

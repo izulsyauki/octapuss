@@ -2,11 +2,11 @@
 
 A native macOS pointer playground with a joyful octopus-and-cat identity.
 
-**Status: app-local repair · 15 October 2026.** The repository contains a native SwiftUI/AppKit app, a minimal Xcode app project, and focused executable regression checks.
+**Status: system-arrow backend experiment · 15 October 2026.** The user has requested customization outside Octapuss. The native SwiftUI/AppKit app now includes an explicit Apply system arrow action and an independent local playground.
 
 The first idea is deliberately small: choose a static pointer style, try it at actual size, and enable or pause it from a native Mac app. The brand combines a cat-eared octopus mascot with clear, practical pointer artwork.
 
-The supported product direction is **app-local customization inside Octapuss**. Cursor-hiding and across-app companion experiments have been removed from the executable. See [historical feasibility](docs/FEASIBILITY_RESULTS.md).
+The requested product direction is **native system arrow customization**. The new backend registers arrow images with macOS using private APIs and preserves other cursor roles. Cursor-hiding and pointer-following overlays are excluded. See [system backend findings and limits](docs/SYSTEM_CURSOR.md).
 
 ## Read the plan
 
@@ -22,7 +22,9 @@ The supported product direction is **app-local customization inside Octapuss**. 
 
 ## Phase 0 proof
 
-The app includes three cursor colors, three sizes, saved light/dark preview backgrounds, menu-bar access, and working Restore/Resume controls. A native preview view owns its cursor rectangle and real Boop button. Each click updates visible feedback. Restore disables the custom cursor inside the playground; choosing a preset while paused preserves that state. No global polling timer, overlay panel, or cursor-hide call runs.
+Choose a preset and size, then press **Apply system arrow** to register it outside Octapuss. Changes to the selection remain a preview until Apply is pressed again. Restore restores the saved system-arrow baseline and pauses the local preview; Resume reactivates only the local preview. A durable backup and temporary crash-recovery subprocess protect applied registrations. Nothing is installed at login.
+
+If Octapuss reports **Pointer color override**, open System Settings → Accessibility → Display → Pointer and choose **Reset Colors**, then Apply again. Custom macOS outline/fill colors can override cursor themes. Octapuss leaves those preferences unchanged and explains the conflict.
 
 Build with the installed Command Line Tools:
 
@@ -46,6 +48,6 @@ See [the measured Phase 0 result](docs/FEASIBILITY_RESULTS.md) before choosing t
 4. Add the proven engine, recovery, and settings.
 5. Test the declared support matrix and prepare a local beta.
 
-**Selected scope:** app-local customization. Across-app behavior requires a future explicit scope decision.
+**Selected scope:** system-arrow customization, following the user's updated request. This private-API experiment is for direct distribution; App Store compatibility and universal application/OS coverage are not claimed.
 
 No system permissions, login items, helpers, or persistent system cursor changes are installed by the proof.
