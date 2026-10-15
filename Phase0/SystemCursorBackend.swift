@@ -244,8 +244,10 @@ struct CursorSnapshot: Codable {
 
     /// Compare decoded pixels, not PNG encoding, to detect another utility taking ownership.
     func matches(_ other: CursorSnapshot) throws -> Bool {
-        guard name == other.name, width == other.width, height == other.height,
-              x == other.x, y == other.y, frames == other.frames,
+        // WindowServer stores geometry as floats; decoded pixel identity below
+        // still provides the ownership check for subpixel-rounding differences.
+        guard name == other.name, abs(width - other.width) < 0.00001, abs(height - other.height) < 0.00001,
+              abs(x - other.x) < 0.00001, abs(y - other.y) < 0.00001, frames == other.frames,
               abs(duration - other.duration) < 0.000001 else { return false }
         func hashes(_ data: [Data]) throws -> [String] {
             try data.map { png in

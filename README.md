@@ -29,6 +29,8 @@ The requested product direction is **native system cursor customization**. The b
 
 `.cur` files retain their click hotspot and aspect ratio. Valid `.ani` files retain animation; native playback uses up to 24 uniform steps. Recognizable filenames map text, link, resize, loading, and other roles; unknown names can be assigned manually. Windows handwriting and alternate-select have no equivalent global slot. Older first-frame imports can be updated from their original folder. The app stores local copies, so moving downloads does not break the library. Removing a file leaves its download and the applied system effect unchanged.
 
+Native property-list `.cursor` themes such as **Anya.cursor** can also be imported through **Import cursor files…**, one theme at a time. Their animations and supported native roles become one selectable set. See [native theme support and verification](docs/NATIVE_THEMES.md).
+
 The redesigned library shows every imported cursor in the selected set. Built-in templates show their custom arrow plus native macOS shapes, clearly labeled as unchanged. See [the redesign and references](docs/UI_REDESIGN.md) and [import formats, limits, and verification](docs/CURSOR_IMPORT.md).
 
 ## Phase 0 proof

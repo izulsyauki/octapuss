@@ -185,13 +185,13 @@ final class ProofStore: ObservableObject {
         panel.title = asFolder ? "Import cursor set" : "Import cursor files"
         panel.message = asFolder
             ? "Choose an unzipped folder. Cursor roles are matched by filename; ANI animation is imported."
-            : "Choose .cur or .ani files. Files selected together become one set; ANI animation is imported."
+            : "Choose .cur or .ani files, or one .cursor theme. Animation and supported cursor roles are imported."
         panel.prompt = "Import"
         panel.canChooseDirectories = asFolder
         panel.canChooseFiles = !asFolder
         panel.allowsMultipleSelection = !asFolder
         if !asFolder {
-            panel.allowedContentTypes = [UTType(filenameExtension: "cur"), UTType(filenameExtension: "ani")].compactMap { $0 }
+            panel.allowedContentTypes = ["cur", "ani", "cursor"].compactMap { UTType(filenameExtension: $0) }
         }
         panel.begin { [weak self] response in
             guard response == .OK else { return }
@@ -222,6 +222,37 @@ final class ProofStore: ObservableObject {
         }
         guard urls.count <= 64 else {
             diagnostic = "Import up to 64 cursor files at a time. Unzip sets first."
+            return
+        }
+        if urls.contains(where: { $0.pathExtension.lowercased() == "cursor" }) {
+            guard urls.count == 1 else {
+                diagnostic = "Import one .cursor theme at a time, separately from CUR/ANI files."
+                return
+            }
+            do {
+                let theme = try CursorFileDecoder.decodeTheme(url: urls[0])
+                let candidates = cursorCollections.filter {
+                    $0.name == theme.name && $0.cursors.map(\.name).sorted() == theme.cursors.map(\.name).sorted()
+                }
+                let existing = candidates.count == 1 ? candidates.first : nil
+                let groupID = existing?.id ?? UUID()
+                var next = importedCursors.filter { $0.setID != existing?.id }
+                let imported = theme.cursors.map { item -> ImportedCursor in
+                    var cursor = item
+                    cursor.collectionID = groupID
+                    cursor.collectionName = theme.name
+                    if let old = existing?.cursors.first(where: { $0.name == cursor.name }) {
+                        cursor.id = old.id
+                        cursor.roleOverride = old.roleOverride
+                    }
+                    return cursor
+                }
+                next.append(contentsOf: imported)
+                try library.save(next)
+                importedCursors = next
+                selectedImportedID = imported.first(where: { $0.effectiveRole == .arrow })?.id ?? imported.first?.id
+                diagnostic = "\(theme.name) imported: \(imported.count) cursors. Preview, then choose Apply pack."
+            } catch { diagnostic = "Theme import was not saved: \(error.localizedDescription)" }
             return
         }
         let grouped = urls.count > 1 || collectionName != nil

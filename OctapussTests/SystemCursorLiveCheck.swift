@@ -73,6 +73,12 @@ struct SystemCursorLiveCheck {
 
     @MainActor
     static func replacements() throws -> [CursorSnapshot] {
+        if let path = ProcessInfo.processInfo.environment["OCTAPUSS_LIVE_NATIVE_THEME"] {
+            let theme = try CursorFileDecoder.decodeTheme(url: URL(fileURLWithPath: path))
+            let plan = try CursorPackPlan(cursors: theme.cursors).replacements(using: SystemCursorAPI(), size: 32)
+            print("Native theme: \(theme.name), \(plan.roleCount) roles, \(plan.snapshots.count) slots, \(plan.snapshots.filter { $0.frames > 1 }.count) animated slots.")
+            return plan.snapshots
+        }
         if let path = ProcessInfo.processInfo.environment["OCTAPUSS_LIVE_PACK_FOLDER"] {
             let files = try FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: path), includingPropertiesForKeys: nil)
                 .filter { ["cur", "ani"].contains($0.pathExtension.lowercased()) }

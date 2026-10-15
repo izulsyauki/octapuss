@@ -98,37 +98,51 @@ enum CursorRole: String, Codable, CaseIterable, Identifiable {
         ]
         return names.first { $0.1.contains(key) }?.0
     }
+
+    static func role(forNativeSlot slot: String) -> CursorRole? {
+        if slot == "com.apple.coregraphics.ArrowS" { return .arrow }
+        if slot == "com.apple.coregraphics.IBeamS" { return .text }
+        return allCases.first { $0.slotNames.contains(slot) }
+    }
 }
 
 extension ImportedCursor {
     var effectiveRole: CursorRole? {
         if roleOverride == "unassigned" { return nil }
-        return roleOverride.flatMap(CursorRole.init(rawValue:)) ?? CursorRole.infer(from: name)
+        return roleOverride.flatMap(CursorRole.init(rawValue:))
+            ?? nativeSlotNames?.first.flatMap(CursorRole.role(forNativeSlot:)) ?? CursorRole.infer(from: name)
+    }
+    var targetSlotNames: [String] {
+        if roleOverride == nil, let nativeSlotNames { return nativeSlotNames }
+        return effectiveRole?.slotNames ?? []
     }
 }
 
 struct CursorPackPlan {
     let cursors: [ImportedCursor]
-    var mapped: [ImportedCursor] { cursors.filter { !($0.effectiveRole?.slotNames.isEmpty ?? true) } }
-    var unmapped: [ImportedCursor] { cursors.filter { $0.effectiveRole?.slotNames.isEmpty ?? true } }
+    var mapped: [ImportedCursor] { cursors.filter { !$0.targetSlotNames.isEmpty } }
+    var unmapped: [ImportedCursor] { cursors.filter { $0.targetSlotNames.isEmpty } }
 
     func replacements(using api: SystemCursorAccess, size: CGFloat) throws -> (snapshots: [CursorSnapshot], roleCount: Int, unavailable: [String]) {
         guard !mapped.isEmpty else { throw CursorImportError.invalid("No system roles are assigned. Choose a role for each cursor, then Apply pack.") }
         let groups = Dictionary(grouping: mapped, by: { $0.effectiveRole! })
-        if let duplicate = groups.first(where: { $0.value.count > 1 }) {
+        if let duplicate = groups.first(where: { group in
+            let names = group.value.flatMap(\.targetSlotNames)
+            return names.count != Set(names).count
+        }) {
             throw CursorImportError.invalid("Two cursors use \(duplicate.key.title). Assign distinct roles before applying this pack.")
         }
-        let requested = Set(mapped.flatMap { $0.effectiveRole!.slotNames }).sorted()
+        let requested = Set(mapped.flatMap(\.targetSlotNames)).sorted()
         let available = Set(try api.readAvailable(requested).map(\.name))
         var snapshots: [CursorSnapshot] = []
         var unavailable: [String] = []
-        var roles = 0
+        var roles = Set<CursorRole>()
         var owners: [String: UUID] = [:]
         // Apply the normal arrow last so a non-arrow registration doesn't remain displayed.
         for cursor in mapped.sorted(by: { ($0.effectiveRole == .arrow ? 1 : 0) < ($1.effectiveRole == .arrow ? 1 : 0) }) {
-            let names = cursor.effectiveRole!.slotNames.filter { available.contains($0) }
+            let names = cursor.targetSlotNames.filter { available.contains($0) }
             if names.isEmpty { unavailable.append(cursor.effectiveRole!.title); continue }
-            roles += 1
+            roles.insert(cursor.effectiveRole!)
             for name in names {
                 if owners[name] != nil {
                     throw CursorImportError.invalid("Two assigned roles share the macOS slot \(name). Unassign one before applying.")
@@ -138,6 +152,6 @@ struct CursorPackPlan {
             }
         }
         guard !snapshots.isEmpty else { throw CursorImportError.invalid("No mapped cursor slots are available in this macOS session. Nothing was applied.") }
-        return (snapshots, roles, unavailable)
+        return (snapshots, roles.count, unavailable)
     }
 }

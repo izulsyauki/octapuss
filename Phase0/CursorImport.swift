@@ -28,6 +28,7 @@ struct ImportedCursor: Codable, Identifiable {
     var roleOverride: String? = nil
     var animation: CursorAnimation? = nil
     var animationDecoded: Bool? = nil
+    var nativeSlotNames: [String]? = nil
 
     var setID: UUID { collectionID ?? id }
     var needsAnimationUpgrade: Bool { firstFrameOnly && animationDecoded != true }
@@ -111,6 +112,88 @@ struct CursorCollection: Identifiable {
 
 enum CursorFileDecoder {
     static let maximumFileSize = 4 * 1024 * 1024
+
+    static func decodeTheme(url: URL) throws -> (name: String, cursors: [ImportedCursor]) {
+        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard size > 0, size <= maximumFileSize else {
+            throw CursorImportError.invalid("Choose a .cursor theme smaller than 4 MB.")
+        }
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let data = try handle.read(upToCount: maximumFileSize + 1) ?? Data()
+        return try decodeTheme(data: data, fallbackName: url.deletingPathExtension().lastPathComponent)
+    }
+
+    static func decodeTheme(data: Data, fallbackName: String) throws -> (name: String, cursors: [ImportedCursor]) {
+        guard !data.isEmpty, data.count <= maximumFileSize,
+              let root = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+              let entries = root["Cursors"] as? [String: [String: Any]], !entries.isEmpty, entries.count <= 64 else {
+            throw CursorImportError.invalid("This .cursor file is not a supported native cursor theme.")
+        }
+        let themeName = String(((root["ThemeName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? fallbackName).prefix(100))
+        var cursors: [ImportedCursor] = []
+        var decodedPixels = 0
+        for slot in entries.keys.sorted() {
+            guard let role = CursorRole.role(forNativeSlot: slot), let entry = entries[slot],
+                  let representations = entry["Representations"] as? [Data], !representations.isEmpty,
+                  representations.count <= 16,
+                  let countValue = entry["FrameCount"] as? NSNumber,
+                  countValue.doubleValue.isFinite, countValue.doubleValue == Double(countValue.intValue),
+                  (1...256).contains(countValue.intValue),
+                  let width = entry["PointsWide"] as? Double, width.isFinite, width > 0, width <= 256,
+                  let height = entry["PointsHigh"] as? Double, height.isFinite, height > 0, height <= 256,
+                  let x = entry["HotSpotX"] as? Double, x.isFinite, x >= 0, x < width,
+                  let y = entry["HotSpotY"] as? Double, y.isFinite, y >= 0, y < height,
+                  let duration = entry["FrameDuration"] as? Double, duration.isFinite,
+                  duration >= 0, duration <= 60, countValue.intValue == 1 || duration > 0 else {
+                throw CursorImportError.invalid("The native cursor entry \(slot) has unsupported metadata or role.")
+            }
+            let count = countValue.intValue
+            var best: (source: CGImageSource, width: Int, height: Int)?
+            for bytes in representations {
+                guard bytes.count <= maximumFileSize,
+                      let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+                      let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                      let w = properties[kCGImagePropertyPixelWidth] as? Int,
+                      let h = properties[kCGImagePropertyPixelHeight] as? Int,
+                      h % count == 0, (1...256).contains(w), (1...256).contains(h / count),
+                      abs(Double(w) / Double(h / count) - width / height) < 0.1 else { continue }
+                if best == nil || w * (h / count) > best!.width * best!.height {
+                    best = (source, w, h / count)
+                }
+            }
+            guard let best else {
+                throw CursorImportError.invalid("The native cursor \(slot) has no valid bounded image strip.")
+            }
+            decodedPixels += best.width * best.height * count
+            guard decodedPixels <= 16 * 1024 * 1024,
+                  let strip = CGImageSourceCreateImageAtIndex(best.source, 0, nil) else {
+                throw CursorImportError.invalid("The theme exceeds the decoded image limit or has an unreadable strip.")
+            }
+            var frames: [Data] = []
+            for index in 0..<count {
+                guard let frame = strip.cropping(to: CGRect(x: 0, y: index * best.height, width: best.width, height: best.height)),
+                      let context = CGContext(data: nil, width: best.width, height: best.height,
+                          bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw malformed() }
+                context.draw(frame, in: CGRect(x: 0, y: 0, width: best.width, height: best.height))
+                guard let image = context.makeImage(),
+                      let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { throw malformed() }
+                frames.append(png)
+            }
+            var cursor = ImportedCursor(id: UUID(), name: "\(role.title) · \(slot.components(separatedBy: ".").last!)",
+                png: frames[0], width: best.width, height: best.height,
+                hotspotX: min(best.width - 1, Int((x / width * Double(best.width)).rounded())),
+                hotspotY: min(best.height - 1, Int((y / height * Double(best.height)).rounded())), firstFrameOnly: false)
+            cursor.animationDecoded = true
+            if count > 1 { cursor.animation = CursorAnimation(frames: frames, durations: Array(repeating: duration, count: count)) }
+            // Precision has distinct native variants. Keep both rather than merging
+            // different images or assigning two cursors to the same slots.
+            cursor.nativeSlotNames = role == .precision ? [slot] : role.slotNames
+            cursors.append(cursor)
+        }
+        return (themeName, cursors)
+    }
 
     static func decode(url: URL) throws -> ImportedCursor {
         guard ["cur", "ani"].contains(url.pathExtension.lowercased()) else {
@@ -282,6 +365,10 @@ struct CursorLibrary {
                   properties[kCGImagePropertyPixelHeight] as? Int == item.height,
                   NSImage(data: item.png) != nil else { throw invalidLibrary() }
             if let role = item.roleOverride, role != "unassigned", CursorRole(rawValue: role) == nil { throw invalidLibrary() }
+            if let slots = item.nativeSlotNames {
+                guard !slots.isEmpty, slots.count <= 32, Set(slots).count == slots.count,
+                      slots.allSatisfy({ CursorRole.role(forNativeSlot: $0) != nil }) else { throw invalidLibrary() }
+            }
             if let animation = item.animation {
                 guard (2...256).contains(animation.frames.count), animation.frames.count == animation.durations.count,
                       animation.durations.allSatisfy({ $0.isFinite && $0 > 0 && $0 <= 60 }) else { throw invalidLibrary() }

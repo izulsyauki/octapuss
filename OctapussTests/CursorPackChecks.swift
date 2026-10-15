@@ -38,6 +38,68 @@ enum CursorPackChecks {
                      "Native animation strip must put the first sequence frame at the top")
         precondition(bitmap.colorAt(x: 16, y: 48)!.usingColorSpace(.deviceRGB)!.redComponent > 0.99)
 
+        let nativeEntry: [String: Any] = ["FrameCount": 2, "FrameDuration": 0.15,
+            "PointsWide": 32.0, "PointsHigh": 32.0, "HotSpotX": 4.0, "HotSpotY": 6.0,
+            "Representations": [sprite.images[0]]]
+        let nativeRoot: [String: Any] = ["ThemeName": "Native test", "Cursors": [
+            "com.apple.coregraphics.Arrow": nativeEntry,
+            "com.apple.cursor.7": nativeEntry, "com.apple.cursor.8": nativeEntry]]
+        let nativeData = try PropertyListSerialization.data(fromPropertyList: nativeRoot, format: .xml, options: 0)
+        let native = try CursorFileDecoder.decodeTheme(data: nativeData, fallbackName: "Fallback")
+        precondition(native.name == "Native test" && native.cursors.count == 3)
+        let nativeArrow = native.cursors.first { $0.effectiveRole == .arrow }!
+        precondition(nativeArrow.hotspotX == 4 && nativeArrow.hotspotY == 6)
+        precondition(nativeArrow.animation!.frames.count == 2 && nativeArrow.animation!.durations == [0.15, 0.15])
+        let nativeBitmap = NSBitmapImageRep(data: nativeArrow.png)!
+        precondition(nativeBitmap.colorAt(x: 16, y: 16)!.usingColorSpace(.deviceRGB)!.blueComponent > 0.99,
+                     "Native theme strips must retain their first frame and vertical order")
+        let fractional = CursorSnapshot(name: "fractional", width: 32, height: 30.967741935483872,
+            x: 1.23456789, y: 2.34567891, frames: 2, duration: 0.4, images: sprite.images)
+        let rounded = CursorSnapshot(name: fractional.name, width: 32, height: Double(Float(fractional.height)),
+            x: Double(Float(fractional.x)), y: Double(Float(fractional.y)), frames: 2,
+            duration: Double(Float(0.4)), images: sprite.images)
+        let roundedMatches = try fractional.matches(rounded)
+        precondition(roundedMatches, "Native float rounding must not become a false ownership conflict")
+        let moved = CursorSnapshot(name: fractional.name, width: 32, height: fractional.height,
+            x: fractional.x + 0.1, y: fractional.y, frames: 2, duration: 0.4, images: sprite.images)
+        let movedMatches = try fractional.matches(moved)
+        precondition(!movedMatches, "A real hotspot change must still fail ownership checks")
+        let nativeSlots = Set(native.cursors.flatMap(\.targetSlotNames))
+        let nativeAPI = FakeSystemCursorAPI(snapshots: try nativeSlots.map { try first.snapshot(name: $0, longestSide: 32) })
+        let nativePlan = try CursorPackPlan(cursors: native.cursors).replacements(using: nativeAPI, size: 32)
+        precondition(nativePlan.roleCount == 2 && nativePlan.snapshots.count == nativeSlots.count,
+                     "Disjoint native precision variants must not conflict")
+        var invalidEntry = nativeEntry
+        invalidEntry["HotSpotX"] = 99.0
+        let invalidData = try PropertyListSerialization.data(fromPropertyList: ["Cursors": ["com.apple.coregraphics.Arrow": invalidEntry]], format: .binary, options: 0)
+        do {
+            _ = try CursorFileDecoder.decodeTheme(data: invalidData, fallbackName: "Bad")
+            preconditionFailure("Out-of-bounds native hotspots must fail")
+        } catch {}
+        if let path = ProcessInfo.processInfo.environment["OCTAPUSS_NATIVE_THEME_PATH"] {
+            let theme = try CursorFileDecoder.decodeTheme(url: URL(fileURLWithPath: path))
+            precondition(theme.name == "Anya" && theme.cursors.count == 13)
+            precondition(theme.cursors.filter { $0.animation != nil }.count == 6)
+            precondition(theme.cursors.first { $0.effectiveRole == .arrow }?.animation?.frames.count == 5)
+            precondition(theme.cursors.first { $0.effectiveRole == .text }?.animation?.frames.count == 12)
+            let suite = "octapuss-native-theme-\(UUID())"
+            let defaults = UserDefaults(suiteName: suite)!
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json")
+            defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: url) }
+            let store = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: url)
+            store.importCursorFiles([URL(fileURLWithPath: path)])
+            precondition(store.selectedCollection?.name == "Anya" && store.importedCursors.count == 13)
+            let ids = Set(store.importedCursors.map(\.id))
+            store.importCursorFiles([URL(fileURLWithPath: path)])
+            precondition(store.importedCursors.count == 13 && Set(store.importedCursors.map(\.id)) == ids)
+            let savedTheme = try CursorLibrary(url: url).load()
+            precondition(savedTheme.count == 13)
+            let slots = Set(theme.cursors.flatMap(\.targetSlotNames))
+            let api = FakeSystemCursorAPI(snapshots: try slots.map { try first.snapshot(name: $0, longestSide: 32) })
+            let plan = try CursorPackPlan(cursors: theme.cursors).replacements(using: api, size: 40)
+            print("Anya theme checks passed: 13 entries, 6 animated, \(plan.roleCount) roles, \(plan.snapshots.count) slots, persistence and stable reimport.")
+        }
+
         let names = ["01 Normal Select", "02 Help Select", "03 Working In Background", "04 Busy", "05 Precision Select",
                      "06 Text Select", "07 Handwriting", "08 Unavailable", "09 Vertical Resize", "10 Horizontal Resize",
                      "11 Diagonal Resize 1", "12 Diagonal Resize 2", "13 Move", "14 Alternate Select", "15 Link Select"]
