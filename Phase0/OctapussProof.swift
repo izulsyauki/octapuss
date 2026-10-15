@@ -140,7 +140,7 @@ final class ProofStore: ObservableObject {
         do {
             if systemSession == nil { systemSession = try SystemCursorSession(api: SystemCursorAPI()) }
             guard let session = systemSession else { return }
-            if session.hasPendingRecovery { try session.restore() }
+            try session.prepareForApplication()
             systemApplied = false
             let names = ["com.apple.coregraphics.Arrow", "com.apple.coregraphics.ArrowS"]
             var replacements: [CursorSnapshot] = []

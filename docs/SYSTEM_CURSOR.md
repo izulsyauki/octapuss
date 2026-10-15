@@ -29,6 +29,7 @@ Private API availability alone does not prove visible cross-app behavior, click 
 - Each new journal and recovery subprocess share a UUID session generation. Under the journal lock, a retired subprocess restores or removes only a journal with its own UUID, preventing a previous watcher from reverting a newer session.
 - The private read API can retain stale registrations within a process, including across newly created WindowServer connections. One-shot reader subprocesses provide independent global-registry reads for backup and verification. They collect only cursor image/metadata; no pointer movement, screen content, or app activity is captured.
 - Restore and Quit restore the saved baseline; sleep and session deactivation request restoration. Startup attempts recovery before further application.
+- Explicit Apply reconciles a stale session after external changes such as Reset Colors: restore still-owned slots, archive the conflicting journal as `system-arrow-backup-<UUID>.json`, and use the current system cursor as the next baseline. External changes are never overwritten during reconciliation. Actual restoration/verification failures continue to block Apply and retain the active journal.
 - Restore also pauses the independent app-local preview. Resume preview affects only that playground; applying a system arrow is always explicit. Incomplete restoration retains recovery status and prevents ordinary Quit.
 
 ## Host evidence: 15 October 2026
@@ -44,7 +45,13 @@ Private API availability alone does not prove visible cross-app behavior, click 
 | Fake-backend regression checks | Passed: partial rollback, repeated Restore, ownership conflict, restoration of unaffected owned slots despite a conflict, and a retired watcher leaving a newer session untouched |
 | Actual visible theme with this host's pointer color override | Not accepted: macOS currently has a custom turquoise pointer outline, and the displayed cursor retained the system shape despite changed registrations |
 
-The final UI detects nondefault pointer outline/fill colors and blocks Apply with setup instructions instead of reporting visible success. It does **not** reset the user's Accessibility colors. Follow Apple's [pointer appearance instructions](https://support.apple.com/guide/mac-help/mchlp2920/mac): System Settings → Accessibility → Display → Pointer → Reset Colors, then return to Octapuss and Apply. Defaults are a white outline and black fill. The override behavior is also described by [MaCursor upstream](https://github.com/writronic/MaCursor#your-cursor-goes-back-to-the-default-in-other-windows).
+The UI detects nondefault pointer outline/fill colors and blocks Apply with setup instructions. It does **not** reset the user's Accessibility colors. Follow Apple's [pointer appearance instructions](https://support.apple.com/guide/mac-help/mchlp2920/mac): System Settings → Accessibility → Display → Pointer → Reset Colors, then return to Octapuss and Apply. Defaults are a white outline and black fill. The override behavior is also described by [MaCursor upstream](https://github.com/writronic/MaCursor#your-cursor-goes-back-to-the-default-in-other-windows).
+
+### Follow-up repair after Reset Colors
+
+The user reset colors, but Apply was blocked by an old journal: the reset changed both arrow registrations to a new native baseline (28 × 40 pt, hotspot 4.5, 4), which correctly failed the old ownership check. The UI reported restoration needed. Explicit Apply now reconciles that conflict without losing the old backup or replacing external artwork during reconciliation.
+
+Verified on the unlocked host: Apply reported Tide/Large, System Settings showed default white outline/black fill, and the actual displayed system cursor returned by `NSCursor.currentSystem` was the mint Tide artwork, 40 × 40 pt with hotspot (2.5, 2.5), outside the playground. Its rendered image was 122 × 122 pixels because the existing Accessibility pointer size was 1.524757 on a Retina display; this scaling prevents exact comparison with unscaled source representations. The read-only probe supports optional `OCTAPUSS_CURSOR_DIAGNOSTIC_PATH` export of the cursor image alone for visual inspection. Restore succeeded in the UI; normal Apply/Restore and owned-worker SIGKILL recovery passed again. Regression coverage includes stale-journal archival, preservation of external changes, restoration to the new baseline, and refusal to archive on a write failure.
 
 ## Reproduce verification
 
@@ -54,4 +61,4 @@ The final UI detects nondefault pointer outline/fill colors and blocks Apply wit
 
 Full Xcode validation, physical hotspot/click observation across applications after Reset Colors, text/link/resize workflow observation, fullscreen, multiple displays, other OS/hardware combinations, sleep/session switching, and notarized distribution remain **untested**. This is an experimental native registration backend, not a claim that every pointer in every app is replaced.
 
-The latest repair rerun verified normal Apply/Restore baseline pixels, dimensions, hotspot, and journal cleanup; SIGKILL recovery restored both slots and removed the journal. Final UI recapture was unavailable because the Mac was locked. Visual acceptance of the final controls, status, and pointer-color guidance is **blocked**, not passed.
+The initial implementation's final UI recapture was blocked by a locked Mac. The follow-up repair above supersedes that blocker for this host's system-arrow rendering and Apply/Restore controls; the broader untested cases remain untested.

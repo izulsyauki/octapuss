@@ -275,6 +275,20 @@ final class SystemCursorSession {
         try Self.withJournalLock(journalURL) { try restoreLocked() }
     }
 
+    /// Explicit Apply accepts externally changed cursors as the next baseline.
+    /// Restore anything still owned first, and retain the old backup for inspection.
+    func prepareForApplication() throws {
+        try Self.withJournalLock(journalURL) {
+            do { try restoreLocked() }
+            catch CursorSystemError.ownershipChanged {
+                let archive = journalURL.deletingLastPathComponent()
+                    .appendingPathComponent("system-arrow-backup-\(UUID().uuidString).json")
+                try FileManager.default.moveItem(at: journalURL, to: archive)
+                closeWatchdog()
+            }
+        }
+    }
+
     private func restoreLocked() throws {
         guard hasPendingRecovery else {
             closeWatchdog()
@@ -317,6 +331,11 @@ final class SystemCursorSession {
         if !restored.isEmpty {
             do { try api.verifyAll(restored) } catch { failures.append(error) }
         }
+        // Never let an ownership conflict conceal a failed write or verification.
+        if let failure = failures.first(where: {
+            if case CursorSystemError.ownershipChanged = $0 { return false }
+            return true
+        }) { throw failure }
         if let failure = failures.first { throw failure }
     }
 

@@ -11,6 +11,28 @@ struct SystemCursorProbe {
         print("Private cursor entry points resolved. Read-only probe; no registration performed.")
         if let visible = NSCursor.currentSystem {
             print("Currently displayed cursor (AppKit): \(visible.image.size.width)x\(visible.image.size.height), hotspot \(visible.hotSpot.x),\(visible.hotSpot.y)")
+            if let path = ProcessInfo.processInfo.environment["OCTAPUSS_CURSOR_DIAGNOSTIC_PATH"],
+               let image = visible.image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+               let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                try png.write(to: URL(fileURLWithPath: path))
+            }
+            if let data = try? Data(contentsOf: SystemCursorSession.defaultJournalURL),
+               let journal = try? JSONDecoder().decode(CursorJournal.self, from: data),
+               let expected = journal.applied.first,
+               let image = visible.image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+               let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                let actual = CursorSnapshot(name: expected.name, width: visible.image.size.width,
+                    height: visible.image.size.height, x: visible.hotSpot.x, y: visible.hotSpot.y,
+                    frames: 1, duration: 0, images: [png])
+                print("Displayed image pixels: \(image.width)x\(image.height)")
+                let matches = try expected.images.contains { representation in
+                    let candidate = CursorSnapshot(name: expected.name, width: expected.width,
+                        height: expected.height, x: expected.x, y: expected.y,
+                        frames: expected.frames, duration: expected.duration, images: [representation])
+                    return try actual.matches(candidate)
+                }
+                print("Displayed cursor exact unscaled pixel match: \(matches) (Accessibility pointer scaling can resample pixels)")
+            }
         }
         for name in ["com.apple.coregraphics.Arrow", "com.apple.coregraphics.ArrowS"] {
             do {

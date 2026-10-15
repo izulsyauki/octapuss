@@ -114,6 +114,12 @@ struct RegressionChecks {
 
             try session.apply(applied, startWatchdog: false)
             api.snapshots["arrow"] = snapshot("arrow", .blush)
+            api.failNextWriteFor = "arrowS"
+            do {
+                try session.prepareForApplication()
+                preconditionFailure("A real restoration failure must block reapplication")
+            } catch {}
+            precondition(session.hasPendingRecovery, "Write failures must retain the active recovery journal")
             do {
                 try session.restore()
                 preconditionFailure("Must not overwrite another utility's cursor")
@@ -121,8 +127,18 @@ struct RegressionChecks {
             precondition(session.hasPendingRecovery, "Ownership conflict must retain the baseline")
             let otherSlotRestored = try api.read("arrowS").matches(original[1])
             precondition(otherSlotRestored, "A conflict must not prevent restoring other owned slots")
-            api.snapshots["arrow"] = applied[0]
+            let external = api.snapshots["arrow"]!
+            try session.prepareForApplication()
+            precondition(!session.hasPendingRecovery, "Explicit Apply must clear a stale ownership conflict")
+            let externalPreserved = try api.read("arrow").matches(external)
+            precondition(externalPreserved, "Preparing Apply must preserve the externally changed cursor")
+            let backups = try FileManager.default.contentsOfDirectory(at: url.deletingLastPathComponent(), includingPropertiesForKeys: nil)
+                .filter { $0.lastPathComponent.hasPrefix("system-arrow-backup-") }
+            precondition(backups.count == 1, "The conflicting backup must be archived")
+            try session.apply(applied, startWatchdog: false)
             try session.restore()
+            let newBaselineRestored = try api.read("arrow").matches(external)
+            precondition(newBaselineRestored, "Restore must use the new system baseline after Reset Colors")
             precondition(!session.hasPendingRecovery)
             print("System transaction checks completed: baseline recovery, partial rollback, idempotent Restore, ownership conflict.")
         } catch { preconditionFailure(error.localizedDescription) }
