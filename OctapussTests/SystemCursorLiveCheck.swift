@@ -7,6 +7,7 @@ import Darwin
 struct SystemCursorLiveCheck {
     @MainActor
     static func main() throws {
+        setbuf(stdout, nil)
         _ = NSApplication.shared
         let args = CommandLine.arguments
         if args.count == 3, args[1] == "--cursor-read-many" {
@@ -30,16 +31,16 @@ struct SystemCursorLiveCheck {
         let url = root.appendingPathComponent("session.json")
         let session = SystemCursorSession(api: api, journalURL: url)
         let theme = try replacements()
-        let baseline = try theme.map { try api.read($0.name) }
+        let baseline = try api.readMany(theme.map(\.name))
         defer {
             try? session.restore()
             if !session.hasPendingRecovery { try? FileManager.default.removeItem(at: root) }
         }
         try session.apply(theme)
         try session.restore()
-        for snapshot in baseline { try api.verify(snapshot) }
+        try api.verifyAll(baseline)
         guard !session.hasPendingRecovery else { throw CursorSystemError.pendingRecovery }
-        print("Normal Apply/Restore: baseline pixels, sizes, hotspots, and journal cleanup verified.")
+        print("Normal Apply/Restore: \(theme.count) slots, baseline pixels, sizes, hotspots, and journal cleanup verified.")
 
         let worker = Process()
         let input = Pipe()
@@ -65,12 +66,21 @@ struct SystemCursorLiveCheck {
             Thread.sleep(forTimeInterval: 0.02)
         }
         guard !session.hasPendingRecovery else { throw CursorSystemError.pendingRecovery }
-        for snapshot in baseline { try api.verify(snapshot) }
-        print("SIGKILL recovery: watchdog restored both arrow slots and removed the journal.")
+        try api.verifyAll(baseline)
+        print("SIGKILL recovery: watchdog restored all \(theme.count) slots and removed the journal.")
     }
+
 
     @MainActor
     static func replacements() throws -> [CursorSnapshot] {
+        if let path = ProcessInfo.processInfo.environment["OCTAPUSS_LIVE_PACK_FOLDER"] {
+            let files = try FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: path), includingPropertiesForKeys: nil)
+                .filter { ["cur", "ani"].contains($0.pathExtension.lowercased()) }
+            let cursors = try files.map { try CursorFileDecoder.decode(url: $0) }
+            let plan = try CursorPackPlan(cursors: cursors).replacements(using: SystemCursorAPI(), size: 32)
+            print("Pack plan: \(plan.roleCount) roles, \(plan.snapshots.count) slots, \(plan.snapshots.filter { $0.frames > 1 }.count) animated slots.")
+            return plan.snapshots
+        }
         if let path = ProcessInfo.processInfo.environment["OCTAPUSS_LIVE_CURSOR_FILE"] {
             let cursor = try CursorFileDecoder.decode(url: URL(fileURLWithPath: path))
             return try ["com.apple.coregraphics.Arrow", "com.apple.coregraphics.ArrowS"].map {

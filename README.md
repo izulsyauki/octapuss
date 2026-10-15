@@ -2,11 +2,11 @@
 
 A native macOS pointer playground with a joyful octopus-and-cat identity.
 
-**Status: system-arrow backend experiment · 15 October 2026.** The user has requested customization outside Octapuss. The native SwiftUI/AppKit app now includes an explicit Apply system arrow action and an independent local playground.
+**Status: native cursor-pack experiment · 15 October 2026.** The SwiftUI/AppKit app supports explicit full-pack application and an independent local playground. The Minecraft fixture maps 13 roles across 56 system slots on this host, including animated loading cursors. See [full-pack behavior and verification](docs/FULL_PACKS.md).
 
 The first idea is deliberately small: choose a static pointer style, try it at actual size, and enable or pause it from a native Mac app. The brand combines a cat-eared octopus mascot with clear, practical pointer artwork.
 
-The requested product direction is **native system arrow customization**. The new backend registers arrow images with macOS using private APIs and preserves other cursor roles. Cursor-hiding and pointer-following overlays are excluded. See [system backend findings and limits](docs/SYSTEM_CURSOR.md).
+The requested product direction is **native system cursor customization**. The backend registers assigned cursor roles with macOS using private APIs. Cursor-hiding and pointer-following overlays are excluded. See [system backend findings and limits](docs/SYSTEM_CURSOR.md).
 
 ## Read the plan
 
@@ -25,15 +25,15 @@ The requested product direction is **native system arrow customization**. The ne
 1. Download a `.cur` or `.ani` file from [RW Designer's cursor library](https://www.rw-designer.com/cursor-library). If you download a ZIP set, unzip it first.
 2. In Octapuss, choose **Add to your collection → Import cursor files…** (up to 64 files) or **Import unzipped set folder…**. Files imported together form one set.
 3. Select a set in the left library, choose a cursor from its gallery, choose a size, and try it in the playground.
-4. Click **Apply system arrow** to use it outside Octapuss. **Restore system pointer** returns to the saved baseline.
+4. Check each file's **Use for** role, then click **Apply pack** to apply all mapped roles outside Octapuss. Built-ins and unnamed single imports use **Apply system arrow**. **Restore system pointer** returns to the saved baseline.
 
-`.cur` files retain their click hotspot and aspect ratio. `.ani` files use their **first sequence frame only**; animation is not played. Importing a whole set does not map its hand/text/resize roles: the selected file replaces the system arrow only. The app stores its own local image copy, so moving the original download does not break the library. Remove from library leaves the download and any applied system arrow unchanged.
+`.cur` files retain their click hotspot and aspect ratio. Valid `.ani` files retain animation; native playback uses up to 24 uniform steps. Recognizable filenames map text, link, resize, loading, and other roles; unknown names can be assigned manually. Windows handwriting and alternate-select have no equivalent global slot. Older first-frame imports can be updated from their original folder. The app stores local copies, so moving downloads does not break the library. Removing a file leaves its download and the applied system effect unchanged.
 
 The redesigned library shows every imported cursor in the selected set. Built-in templates show their custom arrow plus native macOS shapes, clearly labeled as unchanged. See [the redesign and references](docs/UI_REDESIGN.md) and [import formats, limits, and verification](docs/CURSOR_IMPORT.md).
 
 ## Phase 0 proof
 
-Choose a preset and size, then press **Apply system arrow** to register it outside Octapuss. Changes to the selection remain a preview until Apply is pressed again. Restore restores the saved system-arrow baseline and pauses the local preview; Resume reactivates only the local preview. A durable backup and temporary crash-recovery subprocess protect applied registrations. Nothing is installed at login.
+Choose a preset or imported set and size, then press Apply to register it outside Octapuss. Selection changes remain a preview until Apply is pressed again. Restore restores every owned slot and pauses the local preview; Resume reactivates only the local preview. A durable backup and temporary crash-recovery subprocess protect applied registrations. Nothing is installed at login.
 
 If Octapuss reports **Pointer color override**, open System Settings → Accessibility → Display → Pointer and choose **Reset Colors**, then Apply again. Custom macOS outline/fill colors can override cursor themes. Octapuss leaves those preferences unchanged and explains the conflict.
 
@@ -59,6 +59,6 @@ See [the measured Phase 0 result](docs/FEASIBILITY_RESULTS.md) before choosing t
 4. Add the proven engine, recovery, and settings.
 5. Test the declared support matrix and prepare a local beta.
 
-**Selected scope:** system-arrow customization, following the user's updated request. This private-API experiment is for direct distribution; App Store compatibility and universal application/OS coverage are not claimed.
+**Selected scope:** native cursor-pack customization. This private-API experiment is for direct distribution; App Store compatibility and universal application/OS coverage are not claimed.
 
 No system permissions, login items, helpers, or persistent system cursor changes are installed by the proof.

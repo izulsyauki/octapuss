@@ -6,10 +6,12 @@ import Darwin
 protocol SystemCursorAccess {
     func read(_ name: String) throws -> CursorSnapshot
     func readMany(_ names: [String]) throws -> [CursorSnapshot]
+    func readAvailable(_ names: [String]) throws -> [CursorSnapshot]
     func write(_ snapshot: CursorSnapshot) throws
 }
 
 extension SystemCursorAccess {
+    func readAvailable(_ names: [String]) throws -> [CursorSnapshot] { names.compactMap { try? read($0) } }
     func readMany(_ names: [String]) throws -> [CursorSnapshot] { try names.map { try read($0) } }
     func verify(_ expected: CursorSnapshot) throws {
         try verifyAll([expected])
@@ -84,12 +86,20 @@ final class SystemCursorAPI: SystemCursorAccess {
     }
 
     func readMany(_ names: [String]) throws -> [CursorSnapshot] {
+        try readNames(names, availableOnly: false)
+    }
+
+    func readAvailable(_ names: [String]) throws -> [CursorSnapshot] {
+        try readNames(names, availableOnly: true)
+    }
+
+    private func readNames(_ names: [String], availableOnly: Bool) throws -> [CursorSnapshot] {
         // The private copy API caches registrations for a process, even across connections.
         // A one-shot reader is required to observe the actual global registry after writes.
         let process = Process()
         let output = Pipe()
         process.executableURL = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
-        process.arguments = ["--cursor-read-many", names.joined(separator: ",")]
+        process.arguments = ["--cursor-read-many", (availableOnly ? "?" : "") + names.joined(separator: ",")]
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
         try process.run()
@@ -103,7 +113,11 @@ final class SystemCursorAPI: SystemCursorAccess {
         do {
             _ = NSApplication.shared
             let api = try SystemCursorAPI()
-            let snapshots = try names.split(separator: ",").map { try api.readDirect(String($0)) }
+            let optional = names.hasPrefix("?")
+            let list = (optional ? String(names.dropFirst()) : names).split(separator: ",").map(String.init)
+            let snapshots: [CursorSnapshot]
+            if optional { snapshots = list.compactMap { try? api.readDirect($0) } }
+            else { snapshots = try list.map { try api.readDirect($0) } }
             try FileHandle.standardOutput.write(contentsOf: JSONEncoder().encode(snapshots))
             return 0
         } catch { return 1 }
@@ -178,7 +192,7 @@ struct CursorSnapshot: Codable {
     func matches(_ other: CursorSnapshot) throws -> Bool {
         guard name == other.name, width == other.width, height == other.height,
               x == other.x, y == other.y, frames == other.frames,
-              duration == other.duration else { return false }
+              abs(duration - other.duration) < 0.000001 else { return false }
         func hashes(_ data: [Data]) throws -> [String] {
             try data.map { png in
                 guard let image = NSBitmapImageRep(data: png)?.cgImage,
@@ -225,7 +239,7 @@ struct CursorJournal: Codable {
     let applied: [CursorSnapshot]
 }
 
-/// Arrow slots only. No pointer hiding, polling, privilege escalation, or login installation.
+/// Journaled native cursor slots. No pointer hiding or privileged installation.
 @MainActor
 final class SystemCursorSession {
     let journalURL: URL
@@ -254,6 +268,7 @@ final class SystemCursorSession {
     private func applyLocked(_ replacements: [CursorSnapshot], startWatchdog: Bool) throws {
         guard !hasPendingRecovery else { throw CursorSystemError.pendingRecovery }
         guard !replacements.isEmpty else { throw CursorSystemError.invalidBaseline }
+        guard Set(replacements.map(\.name)).count == replacements.count else { throw CursorSystemError.invalidBaseline }
         // Read every baseline before acquiring any global effect.
         let originals = try api.readMany(replacements.map(\.name))
         let sessionID = UUID()

@@ -157,6 +157,8 @@ The current library uses a fixed-width left set sidebar and a flexible right wor
 
 The sidebar is 232 pt wide including 18 pt padding. The workbench uses 24 pt content padding and an adaptive contact sheet: tiles have a 126–180 pt target width with 12 pt gaps. Its header uses 24 pt horizontal padding, 22 pt top padding, and 18 pt bottom padding. Gallery and playground groups are separated by 20 pt. The native playground is 190 pt high; size and background pickers are 220 pt and 112 pt wide. The action bar uses 22 pt horizontal and 14 pt vertical padding.
 
+Imported selections add a compact inspector between the workbench header and scrolling gallery. It stays visible while browsing the contact sheet, uses the existing horizontal content padding, and keeps the selected filename, role picker, click point, dimensions, and animation information together. Long filenames truncate in the middle with full-name help. The role picker remains a native control (300 pt wide); this extension preserves the existing sidebar, window sizes, palette, and mascot.
+
 Spacing tokens record reused observed steps, including 9 pt padding in the search field and set rows. Native layout adapts the gallery column count to available width; there are no website breakpoints or mobile layouts. Retain scrolling and readable actions when content grows.
 
 ## Elevation & Depth
@@ -171,7 +173,7 @@ Rounded rectangles soften the collection without obscuring control roles: search
 
 ### Buttons
 
-Apply system arrow is a native bordered-prominent button tinted lavender. Restore, Resume preview, and Settings retain native macOS behavior. No custom button radius, shadow, or animation token is asserted: those are platform-owned. Apply is explicit; selecting a set, tile, size, or test background changes the local preview.
+Apply pack and Apply system arrow share the native bordered-prominent button tinted lavender. The label reflects whether the current selection applies assigned pack roles or a single arrow. Restore, Resume preview, and Settings retain native macOS behavior. No custom button radius, shadow, or animation token is asserted: those are platform-owned. Apply is explicit; selecting a set, tile, size, or test background changes the local preview, and editing a role saves the mapping for the next Apply.
 
 ### Search field
 
@@ -185,13 +187,17 @@ Rows pair a 40 × 44 pt thumbnail well with a name, count, and selected checkmar
 
 Tiles fit artwork into a 36 × 36 pt image box within a 48 pt high art area. Filename and metadata sit below with 8 pt spacing. Background follows the preview picker; selection adds a checkmark and stronger outline. Imported tiles are selectable and offer removal through a context menu. Built-in packs show one custom arrow and eight informative native macOS samples labeled macOS · unchanged.
 
+Imported tile metadata names the assigned role or prompts for a role or animation upgrade. The selected-file inspector provides the native **Use for** picker, including **Unassigned**, and summarizes mapped roles and files without a system slot. Keep these states explicit in text; a gallery selection alone must not imply a global replacement. Duplicate role assignments block Apply with an explanation. Windows-only roles without a global equivalent remain visible for manual reassignment.
+
 ### Import menu
 
 Add to your collection offers native file and unzipped-folder import. Empty collections supply a first-import action; empty search results explain the absence. The external cursor-library link is a small text affordance, not a bundled marketplace.
 
 ### Playground and action bar
 
-The AppKit preview owns cursor rectangles and the Boop button in one view. It preserves hotspot scaling and uses real cursor feedback. The action bar gives status, diagnostic text, explicit Apply, Restore, and paused-preview recovery a stable location. Applied status must describe the cursor actually applied, even after browsing changes.
+The AppKit preview owns cursor rectangles and the Boop button in one view. It preserves hotspot scaling and uses real cursor feedback. The action bar gives status, diagnostic text, explicit Apply, Restore, and paused-preview recovery a stable location. Applied status must describe the arrow or pack actually applied, even after browsing changes.
+
+ANI playback in the local playground retains the imported sequence and timing. It pauses for Reduce Motion, hidden or detached views, and an inactive window. The inspector shows frame count, an upgrade action for older first-frame imports, or a labeled first-frame fallback for incomplete ANI files. Native pack application uses at most 24 uniform animation steps; describe that limit without implying the local original sequence is reduced. Animation belongs to the cursor artwork and must not change pointer movement or introduce mascot motion.
 
 Native system controls supply keyboard focus and interaction feedback. No looping mascot motion or custom transition timing is implemented. Keep reduced-motion support and immediate pointer tracking as constraints.
 

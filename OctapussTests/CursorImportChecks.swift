@@ -49,6 +49,7 @@ enum CursorImportChecks {
         let animated = try CursorFileDecoder.decode(data: ani, name: "Synthetic animation")
         precondition(animated.firstFrameOnly && animated.width == 16 && animated.height == 32,
                      "ANI must honor the first sequence entry")
+        precondition(!animated.needsAnimationUpgrade, "A known headerless ANI fallback must not offer an endless upgrade")
 
         var invalidOffset = [UInt8](pngCursor)
         invalidOffset.replaceSubrange(18..<22, with: [255, 255, 255, 255])
@@ -109,6 +110,14 @@ enum CursorImportChecks {
         precondition(set.name == "Synthetic cursor set" && set.cursors.count == 4,
                      "Distinct filenames must survive even when artwork is identical")
         precondition(Set(set.cursors.map(\.name)).contains("Arrow") && Set(set.cursors.map(\.name)).contains("Select"))
+        migrated.selectedImportedID = set.cursors[0].id
+        migrated.assignSelectedRole(CursorRole.copy.rawValue)
+        migrated.importCursorFolder(setFolder)
+        precondition(migrated.selectedCollection?.id == set.id && migrated.selectedCollection?.cursors.count == 4,
+                     "Updating the same folder must preserve its collection rather than duplicate it")
+        precondition(Set(migrated.selectedCollection!.cursors.map(\.id)) == Set(set.cursors.map(\.id)))
+        precondition(migrated.importedCursors.first { $0.id == set.cursors[0].id }?.effectiveRole == .copy,
+                     "Updating animation data must preserve an explicit role assignment")
         precondition(!migrated.systemApplied, "Importing a set must never apply it")
         migrated.selectedImportedID = set.cursors[1].id
         precondition(migrated.selectedCollection?.id == set.id)

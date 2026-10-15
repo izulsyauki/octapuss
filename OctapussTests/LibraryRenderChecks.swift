@@ -15,9 +15,10 @@ struct LibraryRenderChecks {
         let libraryURL = root.appendingPathComponent("test-library.json")
         defer { try? FileManager.default.removeItem(at: libraryURL) }
         let store = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
-        store.importCursorFolder(URL(fileURLWithPath: "/tmp/octapuss-import-fixtures"))
+        let packPath = ProcessInfo.processInfo.environment["OCTAPUSS_RENDER_PACK_PATH"] ?? "/tmp/octapuss-import-fixtures"
+        store.importCursorFolder(URL(fileURLWithPath: packPath))
         let importedID = store.selectedImportedID
-        guard store.selectedCollection?.cursors.count == 3 else {
+        guard store.selectedCollection?.cursors.isEmpty == false else {
             throw CursorImportError.invalid("Generate the three synthetic fixtures with OCTAPUSS_IMPORT_FIXTURE_DIR=/tmp/octapuss-import-fixtures and --check first.")
         }
         for imported in [false, true] {

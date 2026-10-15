@@ -114,6 +114,7 @@ final class ProofStore: ObservableObject {
     @Published private(set) var diagnostic = "Custom cursor inside the playground only."
     @Published private(set) var systemApplied = false
     @Published private(set) var systemAppliedLabel = ""
+    @Published private(set) var systemAppliedAsPack = false
     @Published private(set) var systemNeedsRecovery = false
     @Published private(set) var systemColorOverride = false
     private var systemSession: SystemCursorSession?
@@ -134,6 +135,25 @@ final class ProofStore: ObservableObject {
     var selectedCollection: CursorCollection? {
         guard let selected = selectedImportedCursor else { return nil }
         return cursorCollections.first { $0.id == selected.setID }
+    }
+    var appliesPack: Bool {
+        guard let set = selectedCollection else { return false }
+        return set.cursors.count > 1 || set.cursors.first?.effectiveRole != nil
+    }
+    var applyActionTitle: String { appliesPack ? "Apply pack" : "Apply system arrow" }
+    var selectedPackPlan: CursorPackPlan { CursorPackPlan(cursors: selectedCollection?.cursors ?? []) }
+
+    func assignSelectedRole(_ choice: String) {
+        guard let id = selectedImportedID, let library,
+              choice == "unassigned" || CursorRole(rawValue: choice) != nil else { return }
+        do {
+            var next = importedCursors
+            guard let index = next.firstIndex(where: { $0.id == id }) else { return }
+            next[index].roleOverride = choice
+            try library.save(next)
+            importedCursors = next
+            diagnostic = "Role saved. Apply pack when your mappings are ready."
+        } catch { diagnostic = "The role could not be saved: \(error.localizedDescription)" }
     }
 
     init(defaults: UserDefaults = .standard, allowsSystemCustomization: Bool = true, libraryURL: URL? = nil) {
@@ -161,8 +181,8 @@ final class ProofStore: ObservableObject {
         let panel = NSOpenPanel()
         panel.title = asFolder ? "Import cursor set" : "Import cursor files"
         panel.message = asFolder
-            ? "Choose an unzipped folder. Its .cur and .ani files become one set. ANI uses its first frame."
-            : "Choose .cur or .ani files. Files selected together become one set. ANI uses its first frame."
+            ? "Choose an unzipped folder. Cursor roles are matched by filename; ANI animation is imported."
+            : "Choose .cur or .ani files. Files selected together become one set; ANI animation is imported."
         panel.prompt = "Import"
         panel.canChooseDirectories = asFolder
         panel.canChooseFiles = !asFolder
@@ -202,8 +222,11 @@ final class ProofStore: ObservableObject {
             return
         }
         let grouped = urls.count > 1 || collectionName != nil
-        let groupID = grouped ? UUID() : nil
         let groupName = collectionName ?? urls.first?.deletingLastPathComponent().lastPathComponent ?? "Imported set"
+        let incomingNames = urls.map { String($0.deletingPathExtension().lastPathComponent.prefix(100)) }.sorted()
+        let candidates = cursorCollections.filter { $0.name == groupName && $0.cursors.map(\.name).sorted() == incomingNames }
+        let existing = grouped && candidates.count == 1 && Set(incomingNames).count == incomingNames.count ? candidates.first : nil
+        let groupID = existing?.id ?? (grouped ? UUID() : nil)
         var next = importedCursors
         var chosen: UUID?
         var errors: [String] = []
@@ -212,6 +235,14 @@ final class ProofStore: ObservableObject {
                 var cursor = try CursorFileDecoder.decode(url: url)
                 cursor.collectionID = groupID
                 cursor.collectionName = grouped ? String(groupName.prefix(100)) : nil
+                if let old = existing?.cursors.first(where: { $0.name == cursor.name }),
+                   let index = next.firstIndex(where: { $0.id == old.id }) {
+                    cursor.id = old.id
+                    cursor.roleOverride = old.roleOverride
+                    next[index] = cursor
+                    chosen = chosen ?? cursor.id
+                    continue
+                }
                 if !grouped, let duplicate = next.first(where: {
                     $0.png == cursor.png && $0.hotspotX == cursor.hotspotX && $0.hotspotY == cursor.hotspotY
                         && $0.firstFrameOnly == cursor.firstFrameOnly
@@ -224,7 +255,7 @@ final class ProofStore: ObservableObject {
                 try library.save(next)
                 importedCursors = next
                 selectedImportedID = chosen
-                diagnostic = "\(selectedTitle) is ready to preview. Choose Apply system arrow to use it outside Octapuss."
+                diagnostic = "\(selectedTitle) is ready to preview. Choose \(applyActionTitle) to use it outside Octapuss."
             }
             if let first = errors.first { diagnostic = "\(errors.count) file(s) could not be imported. \(first)" }
         } catch { diagnostic = "Import was not saved: \(error.localizedDescription)" }
@@ -245,7 +276,7 @@ final class ProofStore: ObservableObject {
     var statusTitle: String {
         if systemNeedsRecovery { return "System restoration needed" }
         if systemColorOverride { return "Pointer color override" }
-        if systemApplied { return "System arrow: \(systemAppliedLabel)" }
+        if systemApplied { return "System \(systemAppliedAsPack ? "pack" : "arrow"): \(systemAppliedLabel)" }
         return previewEnabled ? "App-local preview active" : "System pointer · preview paused"
     }
 
@@ -264,14 +295,15 @@ final class ProofStore: ObservableObject {
             diagnostic = "macOS pointer colors override themes. In System Settings > Accessibility > Display > Pointer, choose Reset Colors, then Apply."
             return
         }
+        var transactionStarted = false
         do {
             if systemSession == nil { systemSession = try SystemCursorSession(api: SystemCursorAPI()) }
             guard let session = systemSession else { return }
-            try session.prepareForApplication()
-            systemApplied = false
+            var packResult: (snapshots: [CursorSnapshot], roleCount: Int, unavailable: [String])?
+            if appliesPack { packResult = try selectedPackPlan.replacements(using: SystemCursorAPI(), size: pointerSize.points) }
             let names = ["com.apple.coregraphics.Arrow", "com.apple.coregraphics.ArrowS"]
             var replacements: [CursorSnapshot] = []
-            for name in names {
+            for name in packResult == nil ? names : [] {
                 // ArrowS is required on the host macOS 26. Older systems may omit it.
                 if name.hasSuffix("ArrowS"), ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 {
                     continue
@@ -292,14 +324,24 @@ final class ProofStore: ObservableObject {
                                                    x: pointerSize.points / 16, y: pointerSize.points / 16,
                                                    frames: 1, duration: 0, images: images))
             }
+            if let result = packResult { replacements = result.snapshots }
+            transactionStarted = true
+            try session.prepareForApplication()
+            systemApplied = false
             try session.apply(replacements)
             systemApplied = true
             previewEnabled = true
-            systemAppliedLabel = "\(selectedTitle) · \(pointerSize.title)"
+            systemAppliedAsPack = packResult != nil
+            systemAppliedLabel = packResult.map { "\(selectedCollection?.name ?? selectedTitle) · \($0.roleCount) roles" }
+                ?? "\(selectedTitle) · \(pointerSize.title)"
             systemNeedsRecovery = false
-            diagnostic = "System arrow applied. Text, hand, and resize cursors stay native."
+            if let result = packResult {
+                let skipped = selectedPackPlan.unmapped.count + result.unavailable.count
+                diagnostic = "Pack applied: \(result.roleCount) roles across \(result.snapshots.count) system slots."
+                    + (skipped > 0 ? " \(skipped) files/roles have no matching system slot; they remain unchanged." : "")
+            } else { diagnostic = "System arrow applied. Import a named cursor set to customize other roles." }
         } catch {
-            systemNeedsRecovery = systemSession?.hasPendingRecovery ?? false
+            if transactionStarted { systemNeedsRecovery = systemSession?.hasPendingRecovery ?? false }
             diagnostic = error.localizedDescription
         }
     }
@@ -468,30 +510,102 @@ final class CursorPreviewNSView: NSView {
     override var isFlipped: Bool { true }
 
     private var importedID: UUID?
+    private var importedPNG: Data?
+    private var animationData: [Data] = []
+    private var animationDurations: [Double] = []
+    private var animationCursors: [NSCursor] = []
+    private var animationPortraits: [NSImage] = []
+    private var animationTimer: Timer?
+    private var animationStartedAt = 0.0
+    private var animationIndex = 0
 
     func configure(pack: PointerPack, size: PointerSize, dark: Bool, enabled: Bool, clicks: Int, imported: ImportedCursor? = nil) {
-        let artworkChanged = self.pack != pack || importedID != imported?.id
+        let nextFrames = imported?.animation?.frames ?? []
+        let nextDurations = imported?.animation?.durations ?? []
+        let artworkChanged = self.pack != pack || importedID != imported?.id || importedPNG != imported?.png
+            || animationData != nextFrames || animationDurations != nextDurations
         let cursorChanged = artworkChanged || pointerSize != size || customEnabled != enabled
         if artworkChanged {
             portrait = imported?.image(longestSide: 72) ?? PointerArtwork.pointerImage(pack: pack, size: 72)
         }
         importedID = imported?.id
+        importedPNG = imported?.png
+        animationData = nextFrames
+        animationDurations = nextDurations
         self.pack = pack
         pointerSize = size
         darkPreview = dark
         customEnabled = enabled
         clickCount = clicks
         if cursorChanged {
+            stopAnimation()
+            animationIndex = 0
+            animationCursors = []
+            animationPortraits = []
+            if let imported, !nextFrames.isEmpty {
+                for png in nextFrames {
+                    // Frame metadata is fixed by the decoder; only the artwork changes.
+                    let pointerImage = NSImage(data: png)!
+                    let factor = size.points / CGFloat(max(imported.width, imported.height))
+                    pointerImage.size = NSSize(width: CGFloat(imported.width) * factor, height: CGFloat(imported.height) * factor)
+                    animationCursors.append(NSCursor(image: pointerImage,
+                        hotSpot: NSPoint(x: CGFloat(imported.hotspotX) * factor, y: CGFloat(imported.hotspotY) * factor)))
+                    let portraitImage = NSImage(data: png)!
+                    let portraitFactor = 72 / CGFloat(max(imported.width, imported.height))
+                    portraitImage.size = NSSize(width: CGFloat(imported.width) * portraitFactor, height: CGFloat(imported.height) * portraitFactor)
+                    animationPortraits.append(portraitImage)
+                }
+            }
             previewCursor = enabled ? (imported?.cursor(longestSide: size.points) ?? PointerArtwork.cursor(pack: pack, size: size.points)) : .arrow
             window?.invalidateCursorRects(for: self)
             if let window, window.isKeyWindow,
                visibleRect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
                 previewCursor.set()
             }
+            startAnimationIfNeeded()
         }
         appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         needsDisplay = true
         needsLayout = true
+    }
+
+    func stopAnimation() {
+        animationTimer?.invalidate()
+        animationTimer = nil
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        stopAnimation()
+        startAnimationIfNeeded()
+    }
+
+    private func startAnimationIfNeeded() {
+        guard customEnabled, window != nil, animationCursors.count > 1,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        animationStartedAt = Date.timeIntervalSinceReferenceDate
+        let timer = Timer(timeInterval: max(1.0 / 60, min(animationDurations.min() ?? 0.1, 0.1)), repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.advanceAnimation() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        animationTimer = timer
+    }
+
+    private func advanceAnimation() {
+        guard let window, window.isKeyWindow, customEnabled, !isHiddenOrHasHiddenAncestor,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        let total = animationDurations.reduce(0, +)
+        guard total > 0 else { return }
+        let time = (Date.timeIntervalSinceReferenceDate - animationStartedAt).truncatingRemainder(dividingBy: total)
+        var index = 0
+        var end = animationDurations[0]
+        while index + 1 < animationDurations.count && time >= end { index += 1; end += animationDurations[index] }
+        guard index != animationIndex else { return }
+        animationIndex = index
+        previewCursor = animationCursors[index]
+        portrait = animationPortraits[index]
+        needsDisplay = true
+        if visibleRect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) { previewCursor.set() }
     }
 
     @objc private func boop() { onClick?() }
@@ -586,6 +700,7 @@ struct CursorPreviewBridge: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ view: CursorPreviewNSView, coordinator: ()) {
+        view.stopAnimation()
         view.onClick = nil
     }
 }
@@ -654,9 +769,9 @@ struct SettingsView: View {
             Section("System customization") {
                 Label(store.statusTitle, systemImage: "cursorarrow")
                     .foregroundStyle(Color(nsColor: AppPalette.tide))
-                Text("Apply system arrow changes the registered macOS arrow, including outside Octapuss. App-drawn and protected cursors can differ. Text, hand, and resize cursors remain native.")
+                Text("Apply pack changes every assigned and available macOS cursor role. Unassigned roles, app-drawn cursors, protected prompts, and Windows-only roles can differ. Single unnamed cursor imports change the arrow only.")
                     .foregroundStyle(.secondary)
-                Button("Apply selected system arrow") { store.applySystemArrow() }
+                Button(store.applyActionTitle) { store.applySystemArrow() }
                 Button("Restore system pointer") { store.restore() }
                 if store.systemColorOverride {
                     Text("Your custom macOS pointer colors override registered themes. Choose Accessibility > Display > Pointer > Reset Colors in System Settings, then Apply again.")
@@ -755,7 +870,7 @@ struct OctapussProofApp: App {
             Text(store.statusTitle)
             Divider()
             Button("Open Octapuss") { openWindow(id: "main") }
-            Button("Apply system arrow") { store.applySystemArrow() }
+            Button(store.applyActionTitle) { store.applySystemArrow() }
             Menu("Pointer pal") {
                 ForEach(PointerPack.allCases) { pack in
                     Button {

@@ -38,6 +38,7 @@ if [[ "${1:-}" == "--render-library" ]]; then
         -module-cache-path "$module_cache" -framework AppKit -framework SwiftUI \
         "$project_root/Phase0/OctapussProof.swift" \
         "$project_root/Phase0/CursorImport.swift" \
+        "$project_root/Phase0/CursorRoles.swift" \
         "$project_root/Phase0/CursorLibraryView.swift" \
         "$project_root/Phase0/SystemCursorBackend.swift" \
         "$project_root/OctapussTests/LibraryRenderChecks.swift" \
@@ -53,10 +54,12 @@ if [[ "${1:-}" == "--check" ]]; then
         -framework AppKit -framework SwiftUI \
         "$project_root/Phase0/OctapussProof.swift" \
         "$project_root/Phase0/CursorImport.swift" \
+        "$project_root/Phase0/CursorRoles.swift" \
         "$project_root/Phase0/CursorLibraryView.swift" \
         "$project_root/Phase0/SystemCursorBackend.swift" \
         "$project_root/OctapussTests/RegressionChecks.swift" \
         "$project_root/OctapussTests/CursorImportChecks.swift" \
+        "$project_root/OctapussTests/CursorPackChecks.swift" \
         -o "$module_cache/RegressionChecks"
     "$module_cache/RegressionChecks"
     exit
@@ -66,6 +69,8 @@ if [[ "${1:-}" == "--probe-system" ]]; then
     xcrun swiftc -parse-as-library -target "$architecture-apple-macos14.0" -sdk "$sdk_path" \
         -module-cache-path "$module_cache" -framework AppKit \
         "$project_root/Phase0/SystemCursorBackend.swift" \
+        "$project_root/Phase0/CursorImport.swift" \
+        "$project_root/Phase0/CursorRoles.swift" \
         "$project_root/OctapussTests/SystemCursorProbe.swift" \
         -o "$module_cache/SystemCursorProbe"
     "$module_cache/SystemCursorProbe"
@@ -78,6 +83,7 @@ if [[ "${1:-}" == "--check-system-live" ]]; then
         -module-cache-path "$module_cache" -framework AppKit -framework SwiftUI \
         "$project_root/Phase0/OctapussProof.swift" \
         "$project_root/Phase0/CursorImport.swift" \
+        "$project_root/Phase0/CursorRoles.swift" \
         "$project_root/Phase0/CursorLibraryView.swift" \
         "$project_root/Phase0/SystemCursorBackend.swift" \
         "$project_root/OctapussTests/SystemCursorLiveCheck.swift" \
@@ -99,6 +105,7 @@ xcrun swiftc \
     -framework SwiftUI \
     "$project_root/Phase0/OctapussProof.swift" \
     "$project_root/Phase0/CursorImport.swift" \
+    "$project_root/Phase0/CursorRoles.swift" \
     "$project_root/Phase0/CursorLibraryView.swift" \
     "$project_root/Phase0/SystemCursorBackend.swift" \
     -o "$executable_path"

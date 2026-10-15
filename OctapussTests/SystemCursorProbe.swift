@@ -18,23 +18,36 @@ struct SystemCursorProbe {
             }
             if let data = try? Data(contentsOf: SystemCursorSession.defaultJournalURL),
                let journal = try? JSONDecoder().decode(CursorJournal.self, from: data),
-               let expected = journal.applied.first,
                let image = visible.image.cgImage(forProposedRect: nil, context: nil, hints: nil),
                let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
-                let actual = CursorSnapshot(name: expected.name, width: visible.image.size.width,
-                    height: visible.image.size.height, x: visible.hotSpot.x, y: visible.hotSpot.y,
-                    frames: 1, duration: 0, images: [png])
                 print("Displayed image pixels: \(image.width)x\(image.height)")
-                let matches = try expected.images.contains { representation in
-                    let candidate = CursorSnapshot(name: expected.name, width: expected.width,
-                        height: expected.height, x: expected.x, y: expected.y,
-                        frames: expected.frames, duration: expected.duration, images: [representation])
-                    return try actual.matches(candidate)
+                var matches: [String] = []
+                for expected in journal.applied where expected.width == visible.image.size.width
+                    && expected.height == visible.image.size.height && expected.x == visible.hotSpot.x && expected.y == visible.hotSpot.y {
+                    let actual = CursorSnapshot(name: expected.name, width: visible.image.size.width,
+                        height: visible.image.size.height, x: visible.hotSpot.x, y: visible.hotSpot.y,
+                        frames: 1, duration: 0, images: [png])
+                    var matched = false
+                    for representation in expected.images {
+                        guard let strip = NSBitmapImageRep(data: representation)?.cgImage,
+                              strip.width == image.width, strip.height == image.height * expected.frames else { continue }
+                        for index in 0..<expected.frames {
+                            guard let frame = strip.cropping(to: CGRect(x: 0, y: index * image.height, width: image.width, height: image.height)),
+                                  let data = NSBitmapImageRep(cgImage: frame).representation(using: .png, properties: [:]) else { continue }
+                            let candidate = CursorSnapshot(name: expected.name, width: expected.width,
+                                height: expected.height, x: expected.x, y: expected.y, frames: 1, duration: 0, images: [data])
+                            if try actual.matches(candidate) { matched = true; break }
+                        }
+                        if matched { break }
+                    }
+                    if matched { matches.append(expected.name) }
                 }
-                print("Displayed cursor exact unscaled pixel match: \(matches) (Accessibility pointer scaling can resample pixels)")
+                print("Displayed cursor exact artwork matches: \(matches.joined(separator: ", "))")
             }
         }
-        for name in ["com.apple.coregraphics.Arrow", "com.apple.coregraphics.ArrowS"] {
+        let names = ProcessInfo.processInfo.environment["OCTAPUSS_PROBE_NAMES"]?.split(separator: ",").map(String.init)
+            ?? ["com.apple.coregraphics.Arrow", "com.apple.coregraphics.ArrowS"]
+        for name in names {
             do {
                 let snapshot = try api.read(name)
                 print("\(name): \(snapshot.width)x\(snapshot.height), hotspot \(snapshot.x),\(snapshot.y), frames \(snapshot.frames), representations \(snapshot.images.count)")

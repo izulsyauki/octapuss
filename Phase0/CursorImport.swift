@@ -1,6 +1,11 @@
 import AppKit
 import ImageIO
 
+struct CursorAnimation: Codable {
+    let frames: [Data]
+    let durations: [Double]
+}
+
 enum CursorImportError: LocalizedError {
     case invalid(String)
     var errorDescription: String? {
@@ -10,7 +15,7 @@ enum CursorImportError: LocalizedError {
 
 /// A normalized, local copy: no dependency on the original Downloads file.
 struct ImportedCursor: Codable, Identifiable {
-    let id: UUID
+    var id: UUID
     let name: String
     let png: Data
     let width: Int
@@ -20,8 +25,12 @@ struct ImportedCursor: Codable, Identifiable {
     let firstFrameOnly: Bool
     var collectionID: UUID? = nil
     var collectionName: String? = nil
+    var roleOverride: String? = nil
+    var animation: CursorAnimation? = nil
+    var animationDecoded: Bool? = nil
 
     var setID: UUID { collectionID ?? id }
+    var needsAnimationUpgrade: Bool { firstFrameOnly && animationDecoded != true }
 
     func image(longestSide: CGFloat) -> NSImage {
         let scale = longestSide / CGFloat(max(width, height))
@@ -39,16 +48,26 @@ struct ImportedCursor: Codable, Identifiable {
     func snapshot(name: String, longestSide: CGFloat) throws -> CursorSnapshot {
         let factor = longestSide / CGFloat(max(width, height))
         let logicalSize = CGSize(width: CGFloat(width) * factor, height: CGFloat(height) * factor)
+        let timeline = systemTimeline
+        let sourceFrames = try timeline.frames.map { data -> CGImage in
+            guard let image = NSBitmapImageRep(data: data)?.cgImage else {
+                throw CursorImportError.invalid("An animation frame could not be read. Reimport this cursor.")
+            }
+            return image
+        }
         let images = try [1.0, 2.0, 5.0, 10.0].map { scale -> Data in
-            guard let original = NSBitmapImageRep(data: png)?.cgImage,
-                  let context = CGContext(data: nil, width: max(1, Int((logicalSize.width * scale).rounded())),
-                    height: max(1, Int((logicalSize.height * scale).rounded())), bitsPerComponent: 8,
+            let w = max(1, Int((logicalSize.width * scale).rounded()))
+            let h = max(1, Int((logicalSize.height * scale).rounded()))
+            guard let context = CGContext(data: nil, width: w,
+                    height: h * sourceFrames.count, bitsPerComponent: 8,
                     bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
                 throw CursorImportError.invalid("The imported image could not be rendered. Import it again.")
             }
             context.interpolationQuality = .none
-            context.draw(original, in: CGRect(x: 0, y: 0, width: context.width, height: context.height))
+            for (index, frame) in sourceFrames.enumerated() {
+                context.draw(frame, in: CGRect(x: 0, y: (sourceFrames.count - index - 1) * h, width: w, height: h))
+            }
             guard let image = context.makeImage(),
                   let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
                 throw CursorImportError.invalid("The imported image could not be rendered. Import it again.")
@@ -57,7 +76,30 @@ struct ImportedCursor: Codable, Identifiable {
         }
         return CursorSnapshot(name: name, width: logicalSize.width, height: logicalSize.height,
                               x: CGFloat(hotspotX) * factor, y: CGFloat(hotspotY) * factor,
-                              frames: 1, duration: 0, images: images)
+                              frames: sourceFrames.count, duration: timeline.duration, images: images)
+    }
+
+    /// The native backend has a uniform frame interval and a 24-frame limit.
+    /// Constant-rate ANI up to 24 steps is exact; other timelines are time-sampled.
+    var systemTimeline: (frames: [Data], duration: Double) {
+        guard let animation, animation.frames.count > 1 else { return ([png], 0) }
+        let total = animation.durations.reduce(0, +)
+        let equal = animation.durations.allSatisfy { abs($0 - animation.durations[0]) < 0.000001 }
+        if animation.frames.count <= 24 && equal { return (animation.frames, animation.durations[0]) }
+        let count = min(24, max(2, animation.frames.count))
+        let interval = total / Double(count)
+        var output: [Data] = []
+        var index = 0
+        var end = animation.durations[0]
+        for step in 0..<count {
+            let time = Double(step) * interval
+            while index + 1 < animation.frames.count && time >= end {
+                index += 1
+                end += animation.durations[index]
+            }
+            output.append(animation.frames[index])
+        }
+        return (output, interval)
     }
 }
 
@@ -86,8 +128,12 @@ enum CursorFileDecoder {
 
     static func decode(data: Data, name: String) throws -> ImportedCursor {
         guard !data.isEmpty, data.count <= maximumFileSize else { throw malformed() }
-        let animated = data.starts(with: Array("RIFF".utf8))
-        let bytes = [UInt8](try animated ? firstANIFrame(data) : data)
+        if data.starts(with: Array("RIFF".utf8)) { return try decodeANI(data, name: name) }
+        return try decodeCUR(data, name: name)
+    }
+
+    private static func decodeCUR(_ data: Data, name: String) throws -> ImportedCursor {
+        let bytes = [UInt8](data)
         func u16(_ offset: Int) -> Int { Int(bytes[offset]) | Int(bytes[offset + 1]) << 8 }
         func u32(_ offset: Int) -> Int { (0..<4).reduce(0) { $0 | Int(bytes[offset + $1]) << (8 * $1) } }
         guard bytes.count >= 6, u16(0) == 0, u16(2) == 2 else { throw malformed() }
@@ -130,18 +176,20 @@ enum CursorFileDecoder {
             guard let normalized = context.makeImage(),
                   let png = NSBitmapImageRep(cgImage: normalized).representation(using: .png, properties: [:]) else { continue }
             return ImportedCursor(id: UUID(), name: String(name.prefix(100)), png: png, width: w, height: h,
-                                  hotspotX: candidate.2, hotspotY: candidate.3, firstFrameOnly: animated)
+                                  hotspotX: candidate.2, hotspotY: candidate.3, firstFrameOnly: false)
         }
         throw CursorImportError.invalid("This cursor's image encoding is unsupported. Try another .cur file from the set.")
     }
 
-    private static func firstANIFrame(_ data: Data) throws -> Data {
+    private static func decodeANI(_ data: Data, name: String) throws -> ImportedCursor {
         let bytes = [UInt8](data)
         func u32(_ offset: Int) -> Int { (0..<4).reduce(0) { $0 | Int(bytes[offset + $1]) << (8 * $1) } }
         func tag(_ offset: Int) -> String { String(bytes: bytes[offset..<(offset + 4)], encoding: .ascii) ?? "" }
         guard bytes.count >= 12, tag(8) == "ACON", u32(4) == bytes.count - 8 else { throw malformed() }
         var frames: [Data] = []
-        var firstStep = 0
+        var sequence: [Int] = []
+        var rates: [Int] = []
+        var header: [Int] = []
         func walk(_ start: Int, _ end: Int, depth: Int) throws {
             guard depth <= 2 else { throw malformed() }
             var position = start
@@ -157,8 +205,14 @@ enum CursorFileDecoder {
                     guard frames.count < 256 else { throw malformed() }
                     frames.append(Data(bytes[body..<(body + size)]))
                 case "seq ":
-                    guard size >= 4, size % 4 == 0 else { throw malformed() }
-                    firstStep = u32(body)
+                    guard size >= 4, size % 4 == 0, size <= 256 * 4 else { throw malformed() }
+                    sequence = stride(from: body, to: body + size, by: 4).map(u32)
+                case "rate":
+                    guard size >= 4, size % 4 == 0, size <= 256 * 4 else { throw malformed() }
+                    rates = stride(from: body, to: body + size, by: 4).map(u32)
+                case "anih":
+                    guard size >= 36 else { throw malformed() }
+                    header = stride(from: body, to: body + 36, by: 4).map(u32)
                 default: break
                 }
                 position = body + size + size % 2
@@ -166,8 +220,40 @@ enum CursorFileDecoder {
             }
         }
         try walk(12, bytes.count, depth: 0)
-        guard firstStep < frames.count else { throw malformed() }
-        return frames[firstStep]
+        guard !frames.isEmpty else { throw malformed() }
+        // Incomplete legacy ANI containers remain a clearly labeled static fallback.
+        if header.isEmpty {
+            let first = sequence.first ?? 0
+            guard first < frames.count else { throw malformed() }
+            let cursor = try decodeCUR(frames[first], name: name)
+            var fallback = ImportedCursor(id: cursor.id, name: cursor.name, png: cursor.png, width: cursor.width,
+                height: cursor.height, hotspotX: cursor.hotspotX, hotspotY: cursor.hotspotY, firstFrameOnly: true)
+            fallback.animationDecoded = true
+            return fallback
+        }
+        guard header[0] >= 36, header[1] == frames.count, header[1] <= 256,
+              header[2] > 0, header[2] <= 256, header[8] & 1 == 1 else { throw malformed() }
+        let steps = header[2]
+        if sequence.isEmpty {
+            guard header[8] & 2 == 0 else { throw malformed() }
+            sequence = (0..<steps).map { $0 % frames.count }
+        }
+        guard sequence.count == steps, sequence.allSatisfy({ $0 < frames.count }),
+              rates.isEmpty || rates.count == steps else { throw malformed() }
+        let fallback = header[7] == 0 ? 6 : header[7]
+        let jiffies = rates.isEmpty ? Array(repeating: fallback, count: steps) : rates.map { $0 == 0 ? fallback : $0 }
+        guard jiffies.allSatisfy({ $0 > 0 && $0 <= 3600 }) else { throw malformed() }
+        let decoded = try frames.map { try decodeCUR($0, name: name) }
+        var result = decoded[sequence[0]]
+        result.animationDecoded = true
+        guard decoded.allSatisfy({ $0.width == result.width && $0.height == result.height
+            && $0.hotspotX == result.hotspotX && $0.hotspotY == result.hotspotY }) else {
+            throw CursorImportError.invalid("ANI frames need a consistent canvas and click point. Try another cursor file.")
+        }
+        if steps > 1 {
+            result.animation = CursorAnimation(frames: sequence.map { decoded[$0].png }, durations: jiffies.map { Double($0) / 60 })
+        }
+        return result
     }
 
     private static func malformed() -> CursorImportError {
@@ -195,6 +281,18 @@ struct CursorLibrary {
                   properties[kCGImagePropertyPixelWidth] as? Int == item.width,
                   properties[kCGImagePropertyPixelHeight] as? Int == item.height,
                   NSImage(data: item.png) != nil else { throw invalidLibrary() }
+            if let role = item.roleOverride, role != "unassigned", CursorRole(rawValue: role) == nil { throw invalidLibrary() }
+            if let animation = item.animation {
+                guard (2...256).contains(animation.frames.count), animation.frames.count == animation.durations.count,
+                      animation.durations.allSatisfy({ $0.isFinite && $0 > 0 && $0 <= 60 }) else { throw invalidLibrary() }
+                for png in animation.frames {
+                    guard let source = CGImageSourceCreateWithData(png as CFData, nil),
+                          let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                          properties[kCGImagePropertyPixelWidth] as? Int == item.width,
+                          properties[kCGImagePropertyPixelHeight] as? Int == item.height,
+                          NSImage(data: png) != nil else { throw invalidLibrary() }
+                }
+            }
         }
         return items
     }

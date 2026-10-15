@@ -1,5 +1,7 @@
 # Downloaded cursor imports
 
+**Current extension:** imports now decode ANI animation and match filenames to editable macOS roles. Apply pack applies all mapped roles together. Matching folder updates preserve IDs and manual assignments. See [full-pack behavior, limits, and verification](FULL_PACKS.md), which supersedes the first-frame/arrow-only milestone recorded below.
+
 Octapuss imports local Windows `.cur` and `.ani` files from sources such as [RW Designer](https://www.rw-designer.com/cursor-library). Download in your browser, unzip sets, choose Add to your collection, import files or an unzipped folder, preview, then Apply system arrow. Files selected together form a cursor set with every member shown in its gallery. No downloading, executable installation, role inference, or automatic system application occurs during import.
 
 ## Format and scope

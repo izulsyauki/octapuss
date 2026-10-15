@@ -131,6 +131,10 @@ struct CursorLibraryView: View {
                     .help("Settings")
             }.padding(.horizontal, 24).padding(.top, 22).padding(.bottom, 18)
             Divider()
+            if store.selectedImportedCursor != nil {
+                selectionInspector.padding(.horizontal, 24).padding(.vertical, 12)
+                Divider()
+            }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -154,17 +158,17 @@ struct CursorLibraryView: View {
                 }.labelsHidden().pickerStyle(.segmented).frame(width: 112)
                     .accessibilityLabel("Preview background")
             }
-            Text("Pick a cursor to preview and use as your system arrow.")
+            Text(store.appliesPack ? "Preview any cursor below. Apply pack uses all assigned roles together." : "Pick a cursor to preview and use as your system arrow.")
                 .font(.system(size: 12)).foregroundStyle(Color(nsColor: AppPalette.secondaryText))
             LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                 if let set = store.selectedCollection {
                     ForEach(set.cursors) { cursor in
                         Button { store.selectedImportedID = cursor.id } label: {
                             CursorTile(image: cursor.image(longestSide: 34), title: cursor.name,
-                                       detail: cursor.firstFrameOnly ? "ANI · first frame" : "\(cursor.width) × \(cursor.height) px",
+                                       detail: cursor.effectiveRole?.title ?? (cursor.needsAnimationUpgrade ? "Reimport for animation" : "Choose a role"),
                                        selected: cursor.id == store.selectedImportedID, dark: store.darkPreview)
                         }.buttonStyle(.plain)
-                            .accessibilityLabel("Preview \(cursor.name)\(cursor.firstFrameOnly ? ", ANI first frame only" : "")")
+                            .accessibilityLabel("Preview \(cursor.name), \(cursor.effectiveRole?.title ?? "unassigned")\(cursor.needsAnimationUpgrade ? ", reimport for animation" : "")")
                             .accessibilityAddTraits(cursor.id == store.selectedImportedID ? .isSelected : [])
                             .contextMenu {
                                 Button("Remove cursor from library") {
@@ -186,16 +190,44 @@ struct CursorLibraryView: View {
                     }
                 }
             }
-            if store.selectedCollection != nil {
-                Label("Only the selected cursor replaces your arrow. Other system shapes stay native.", systemImage: "info.circle")
+        }
+    }
+
+    private var selectionInspector: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(store.appliesPack
+                      ? "\(selectedRoleCount) roles mapped · \(store.selectedPackPlan.unmapped.count) files without a system slot"
+                      : "Assign a role, or use this single cursor as your arrow", systemImage: "info.circle")
                     .font(.system(size: 11)).foregroundStyle(Color(nsColor: AppPalette.secondaryText))
-                if let cursor = store.selectedImportedCursor {
-                    HStack(spacing: 14) {
-                        Text("Click point: \(cursor.hotspotX), \(cursor.hotspotY)")
-                        Text("\(cursor.width) × \(cursor.height) px")
-                        if cursor.firstFrameOnly { Text("Animation uses its first frame") }
-                    }.font(.system(size: 11)).foregroundStyle(Color(nsColor: AppPalette.secondaryText))
+                Spacer(minLength: 8)
+                if store.selectedCollection?.cursors.contains(where: \.needsAnimationUpgrade) == true {
+                    Button("Update set from folder…") { store.chooseCursorFiles(asFolder: true) }
+                        .controlSize(.small)
+                        .help("Reload this set's original folder to import all ANI animation frames.")
                 }
+            }
+            if let cursor = store.selectedImportedCursor {
+                HStack(spacing: 16) {
+                    Text(cursor.name).font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1).truncationMode(.middle).help(cursor.name)
+                    Spacer(minLength: 8)
+                    Picker("Use for", selection: Binding(
+                        get: { cursor.effectiveRole?.rawValue ?? "unassigned" },
+                        set: { store.assignSelectedRole($0) }
+                    )) {
+                        Text("Unassigned").tag("unassigned")
+                        ForEach(CursorRole.allCases) { role in Text(role.title).tag(role.rawValue) }
+                    }.frame(width: 300)
+                        .accessibilityLabel("Role for selected cursor")
+                }
+                HStack(spacing: 14) {
+                    Text("Click point: \(cursor.hotspotX), \(cursor.hotspotY)")
+                    Text("\(cursor.width) × \(cursor.height) px")
+                    if let animation = cursor.animation { Text("\(animation.frames.count) animation frames") }
+                    else if cursor.needsAnimationUpgrade { Text("Reimport for full ANI animation") }
+                    else if cursor.firstFrameOnly { Text("ANI without animation header · first frame only") }
+                }.font(.system(size: 11)).foregroundStyle(Color(nsColor: AppPalette.secondaryText))
             }
         }
     }
@@ -229,7 +261,7 @@ struct CursorLibraryView: View {
                 }
                 Button("Restore system pointer") { store.restore() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
-                Button("Apply system arrow") { store.applySystemArrow() }
+                Button(store.applyActionTitle) { store.applySystemArrow() }
                     .buttonStyle(.borderedProminent)
             }
             Text(store.diagnostic).font(.system(size: 11)).foregroundStyle(Color(nsColor: AppPalette.secondaryText))
@@ -239,6 +271,10 @@ struct CursorLibraryView: View {
         }
         .padding(.horizontal, 22).padding(.vertical, 14)
         .background(Color(nsColor: AppPalette.surface))
+    }
+
+    private var selectedRoleCount: Int {
+        Set(store.selectedPackPlan.mapped.compactMap(\.effectiveRole)).count
     }
 }
 

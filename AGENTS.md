@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Octapuss has an independent app-local preview and an experimental native system-arrow backend requested on 15 October 2026. Source is `Phase0/OctapussProof.swift`, `Phase0/CursorLibraryView.swift`, `Phase0/SystemCursorBackend.swift`, and `Phase0/CursorImport.swift`, with an app target in `Octapuss.xcodeproj`. Read `docs/UI_REDESIGN.md` for the set library/gallery design, `docs/SYSTEM_CURSOR.md` for backend safety and measured limits, and `docs/CURSOR_IMPORT.md` for CUR/ANI first-frame imports. `docs/REPAIR_VERIFICATION.md` records the earlier local repair.
+Octapuss has an independent app-local preview and an experimental native cursor-pack backend. Source is in `Phase0/`, including `CursorRoles.swift`, with an app target in `Octapuss.xcodeproj`. Read `docs/UI_REDESIGN.md` for the library/gallery design, `docs/SYSTEM_CURSOR.md` for backend safety, `docs/CURSOR_IMPORT.md` for imports, and `docs/FULL_PACKS.md` for current role mapping, animation, and measured limits. `docs/REPAIR_VERIFICATION.md` records the earlier local repair.
 
 When implementation begins, follow the proposed layout: `Octapuss/App`, `Features`, `Cursor`, `Platform`, `Models`, `Persistence`, and `Resources`, with focused tests in `OctapussTests`. Keep the app-local preview independent from any across-app cursor backend.
 

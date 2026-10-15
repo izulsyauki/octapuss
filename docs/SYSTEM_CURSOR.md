@@ -1,4 +1,6 @@
-# System arrow backend
+# Native system cursor backend
+
+**Current extension:** imported packs now apply all assigned, available roles, including animation. See [full-pack scope and current evidence](FULL_PACKS.md). The arrow-only milestone and its historical evidence below are retained for context. Text/link operation has since been confirmed by the user; 56-slot Apply/Restore and owned-worker crash recovery passed on this host.
 
 The user changed the requested scope from app-local preview to system-wide native-style customization on 15 October 2026. The first backend milestone replaces registered standard arrow slots while preserving native text, hand, resize, busy, and application-owned cursors.
 
