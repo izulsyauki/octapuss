@@ -32,6 +32,20 @@ case "$architecture" in
         ;;
 esac
 
+if [[ "${1:-}" == "--render-library" ]]; then
+    xcrun swiftc -parse-as-library -D OCTAPUSS_CHECKS \
+        -target "$architecture-apple-macos14.0" -sdk "$sdk_path" \
+        -module-cache-path "$module_cache" -framework AppKit -framework SwiftUI \
+        "$project_root/Phase0/OctapussProof.swift" \
+        "$project_root/Phase0/CursorImport.swift" \
+        "$project_root/Phase0/CursorLibraryView.swift" \
+        "$project_root/Phase0/SystemCursorBackend.swift" \
+        "$project_root/OctapussTests/LibraryRenderChecks.swift" \
+        -o "$module_cache/LibraryRenderChecks"
+    "$module_cache/LibraryRenderChecks"
+    exit
+fi
+
 if [[ "${1:-}" == "--check" ]]; then
     xcrun swiftc -parse-as-library -D OCTAPUSS_CHECKS \
         -target "$architecture-apple-macos14.0" -sdk "$sdk_path" \
@@ -39,6 +53,7 @@ if [[ "${1:-}" == "--check" ]]; then
         -framework AppKit -framework SwiftUI \
         "$project_root/Phase0/OctapussProof.swift" \
         "$project_root/Phase0/CursorImport.swift" \
+        "$project_root/Phase0/CursorLibraryView.swift" \
         "$project_root/Phase0/SystemCursorBackend.swift" \
         "$project_root/OctapussTests/RegressionChecks.swift" \
         "$project_root/OctapussTests/CursorImportChecks.swift" \
@@ -63,6 +78,7 @@ if [[ "${1:-}" == "--check-system-live" ]]; then
         -module-cache-path "$module_cache" -framework AppKit -framework SwiftUI \
         "$project_root/Phase0/OctapussProof.swift" \
         "$project_root/Phase0/CursorImport.swift" \
+        "$project_root/Phase0/CursorLibraryView.swift" \
         "$project_root/Phase0/SystemCursorBackend.swift" \
         "$project_root/OctapussTests/SystemCursorLiveCheck.swift" \
         -o "$module_cache/SystemCursorLiveCheck"
@@ -83,6 +99,7 @@ xcrun swiftc \
     -framework SwiftUI \
     "$project_root/Phase0/OctapussProof.swift" \
     "$project_root/Phase0/CursorImport.swift" \
+    "$project_root/Phase0/CursorLibraryView.swift" \
     "$project_root/Phase0/SystemCursorBackend.swift" \
     -o "$executable_path"
 

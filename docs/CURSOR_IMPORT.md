@@ -1,6 +1,6 @@
 # Downloaded cursor imports
 
-Octapuss imports local Windows `.cur` and `.ani` files from sources such as [RW Designer](https://www.rw-designer.com/cursor-library). Download in your browser, unzip sets, choose Import cursor under Your cursors, preview, then Apply system arrow. No downloading, executable installation, role inference, or automatic system application occurs during import.
+Octapuss imports local Windows `.cur` and `.ani` files from sources such as [RW Designer](https://www.rw-designer.com/cursor-library). Download in your browser, unzip sets, choose Add to your collection, import files or an unzipped folder, preview, then Apply system arrow. Files selected together form a cursor set with every member shown in its gallery. No downloading, executable installation, role inference, or automatic system application occurs during import.
 
 ## Format and scope
 
@@ -14,9 +14,9 @@ Microsoft documents the [DIB/PNG cursor resources and RIFF animated cursor conta
 
 ## Storage and bounds
 
-`~/Library/Application Support/Octapuss/imported-cursors.json` contains names, UUIDs, normalized PNG images, original dimensions, hotspots, and first-frame flags. Selection is stored in preferences. Paths to original downloads are not retained. Writes are atomic; failures preserve the previous in-memory selection/library. Identical normalized artwork/hotspot/first-frame mode is deduplicated. Corrupt libraries are preserved and are not overwritten by an attempted import.
+`~/Library/Application Support/Octapuss/imported-cursors.json` contains names, UUIDs, normalized PNG images, original dimensions, hotspots, first-frame flags, and optional collection IDs/names. Selection is stored in preferences. Libraries without collection metadata remain readable as single-cursor sets. Paths to original downloads are not retained. Writes are atomic; failures preserve the previous in-memory selection/library. Every file in a grouped import is preserved, including distinct filenames with identical artwork. A repeated single-file import reuses an existing matching record. Reimporting a multi-file set creates a new set. Corrupt libraries are preserved and are not overwritten by an attempted import.
 
-Limits: 4 MB per source file (bounded read), 16 files per import, 64 CUR directory images, 256 ANI frames, 256 px per canvas dimension, 128 library entries, and 64 MB persisted library. Unsupported or malformed files report an actionable error. Valid files in a mixed selection can still be imported; the diagnostic reports failures. ZIP archives and ICO frames without CUR hotspot metadata are not supported.
+Limits: 4 MB per source file (bounded read), 64 files per import, 64 CUR directory images, 256 ANI frames, 256 px per canvas dimension, 128 library entries, and 64 MB persisted library. Unsupported or malformed files report an actionable error. Valid files in a mixed selection can still be imported; the diagnostic reports failures. Folder import reads only regular cursor files in that folder, skips hidden files, and does not recurse. ZIP archives and ICO frames without CUR hotspot metadata are not supported.
 
 ## Verification on this host
 

@@ -23,13 +23,13 @@ The requested product direction is **native system arrow customization**. The ne
 ## Use downloaded cursors
 
 1. Download a `.cur` or `.ani` file from [RW Designer's cursor library](https://www.rw-designer.com/cursor-library). If you download a ZIP set, unzip it first.
-2. In Octapuss, choose **Import cursor…** or **+** under **Your cursors** and select up to 16 files.
-3. Select an imported cursor, choose a size, and try it in the playground.
+2. In Octapuss, choose **Add to your collection → Import cursor files…** (up to 64 files) or **Import unzipped set folder…**. Files imported together form one set.
+3. Select a set in the left library, choose a cursor from its gallery, choose a size, and try it in the playground.
 4. Click **Apply system arrow** to use it outside Octapuss. **Restore system pointer** returns to the saved baseline.
 
 `.cur` files retain their click hotspot and aspect ratio. `.ani` files use their **first sequence frame only**; animation is not played. Importing a whole set does not map its hand/text/resize roles: the selected file replaces the system arrow only. The app stores its own local image copy, so moving the original download does not break the library. Remove from library leaves the download and any applied system arrow unchanged.
 
-See [import formats, limits, and verification](docs/CURSOR_IMPORT.md).
+The redesigned library shows every imported cursor in the selected set. Built-in templates show their custom arrow plus native macOS shapes, clearly labeled as unchanged. See [the redesign and references](docs/UI_REDESIGN.md) and [import formats, limits, and verification](docs/CURSOR_IMPORT.md).
 
 ## Phase 0 proof
 

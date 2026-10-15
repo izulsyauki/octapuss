@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 // Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4
 // Native utility · genre: playful-operate · theme: DESIGN.md locked
-// Structural fingerprint: pointer workbench with one dominant live preview.
+// Structural fingerprint: set library, cursor contact sheet, compact live playground.
 
 enum AppPalette {
     static let ink = NSColor(srgbRed: 0.176, green: 0.141, blue: 0.251, alpha: 1)
@@ -31,6 +31,18 @@ enum AppPalette {
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? surfaceDark
             : surfaceLight
+    }
+
+    static let sidebar = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? surfaceDark
+            : NSColor(srgbRed: 0.957, green: 0.929, blue: 0.969, alpha: 1)
+    }
+
+    static let secondaryText = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(srgbRed: 0.714, green: 0.675, blue: 0.792, alpha: 1)
+            : NSColor(srgbRed: 0.396, green: 0.337, blue: 0.435, alpha: 1)
     }
 }
 
@@ -113,6 +125,16 @@ final class ProofStore: ObservableObject {
     private var library: CursorLibrary?
     var selectedImportedCursor: ImportedCursor? { importedCursors.first { $0.id == selectedImportedID } }
     var selectedTitle: String { selectedImportedCursor?.name ?? pack.title }
+    var cursorCollections: [CursorCollection] {
+        Dictionary(grouping: importedCursors, by: \.setID).map { id, items in
+            CursorCollection(id: id, name: items.first?.collectionName ?? items.first?.name ?? "Imported set",
+                             cursors: items.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+    var selectedCollection: CursorCollection? {
+        guard let selected = selectedImportedCursor else { return nil }
+        return cursorCollections.first { $0.id == selected.setID }
+    }
 
     init(defaults: UserDefaults = .standard, allowsSystemCustomization: Bool = true, libraryURL: URL? = nil) {
         self.defaults = defaults
@@ -135,36 +157,62 @@ final class ProofStore: ObservableObject {
         }
     }
 
-    func chooseCursorFiles() {
+    func chooseCursorFiles(asFolder: Bool = false) {
         let panel = NSOpenPanel()
-        panel.title = "Import cursor files"
-        panel.message = "Choose .cur or .ani files. Unzip downloaded sets first. Animated cursors use their first frame."
+        panel.title = asFolder ? "Import cursor set" : "Import cursor files"
+        panel.message = asFolder
+            ? "Choose an unzipped folder. Its .cur and .ani files become one set. ANI uses its first frame."
+            : "Choose .cur or .ani files. Files selected together become one set. ANI uses its first frame."
         panel.prompt = "Import"
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = true
-        panel.allowedContentTypes = [UTType(filenameExtension: "cur"), UTType(filenameExtension: "ani")].compactMap { $0 }
+        panel.canChooseDirectories = asFolder
+        panel.canChooseFiles = !asFolder
+        panel.allowsMultipleSelection = !asFolder
+        if !asFolder {
+            panel.allowedContentTypes = [UTType(filenameExtension: "cur"), UTType(filenameExtension: "ani")].compactMap { $0 }
+        }
         panel.begin { [weak self] response in
             guard response == .OK else { return }
-            self?.importCursorFiles(panel.urls)
+            if asFolder, let folder = panel.url { self?.importCursorFolder(folder) }
+            else { self?.importCursorFiles(panel.urls) }
         }
     }
 
-    func importCursorFiles(_ urls: [URL]) {
+    func importCursorFolder(_ folder: URL) {
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles])
+            let files = try contents.filter {
+                guard ["cur", "ani"].contains($0.pathExtension.lowercased()) else { return false }
+                return try $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true
+            }.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+            guard !files.isEmpty else {
+                diagnostic = "No .cur or .ani files in this folder. Choose the unzipped folder containing the cursor files."
+                return
+            }
+            importCursorFiles(files, collectionName: folder.lastPathComponent)
+        } catch { diagnostic = "The cursor folder could not be opened: \(error.localizedDescription)" }
+    }
+
+    func importCursorFiles(_ urls: [URL], collectionName: String? = nil) {
         guard let library else {
             diagnostic = "Your saved cursor library is unavailable. Your downloads have not been changed."
             return
         }
-        guard urls.count <= 16 else {
-            diagnostic = "Import up to 16 cursor files at a time. Unzip sets first."
+        guard urls.count <= 64 else {
+            diagnostic = "Import up to 64 cursor files at a time. Unzip sets first."
             return
         }
+        let grouped = urls.count > 1 || collectionName != nil
+        let groupID = grouped ? UUID() : nil
+        let groupName = collectionName ?? urls.first?.deletingLastPathComponent().lastPathComponent ?? "Imported set"
         var next = importedCursors
         var chosen: UUID?
         var errors: [String] = []
         for url in urls {
             do {
-                let cursor = try CursorFileDecoder.decode(url: url)
-                if let duplicate = next.first(where: {
+                var cursor = try CursorFileDecoder.decode(url: url)
+                cursor.collectionID = groupID
+                cursor.collectionName = grouped ? String(groupName.prefix(100)) : nil
+                if !grouped, let duplicate = next.first(where: {
                     $0.png == cursor.png && $0.hotspotX == cursor.hotspotX && $0.hotspotY == cursor.hotspotY
                         && $0.firstFrameOnly == cursor.firstFrameOnly
                 }) { chosen = chosen ?? duplicate.id }
@@ -187,8 +235,9 @@ final class ProofStore: ObservableObject {
         do {
             let next = importedCursors.filter { $0.id != id }
             try library.save(next)
+            let setID = selectedImportedCursor?.setID
             importedCursors = next
-            selectedImportedID = nil
+            selectedImportedID = next.first { $0.setID == setID }?.id
             diagnostic = "Removed from your library. The applied system arrow and original download are unchanged."
         } catch { diagnostic = error.localizedDescription }
     }
@@ -373,6 +422,17 @@ enum PointerArtwork {
             tentacles.lineCapStyle = .round
             pack.color.setStroke()
             tentacles.stroke()
+            // A tiny face belongs to the brand mark, never to interaction controls.
+            AppPalette.ink.setFill()
+            for x in [11.0, 19.0] {
+                NSBezierPath(ovalIn: NSRect(x: x - 0.8, y: 13, width: 1.6, height: 2.2)).fill()
+            }
+            let smile = NSBezierPath()
+            smile.move(to: NSPoint(x: 13, y: 17))
+            smile.curve(to: NSPoint(x: 17, y: 17), controlPoint1: NSPoint(x: 14, y: 19), controlPoint2: NSPoint(x: 16, y: 19))
+            smile.lineWidth = 0.8
+            AppPalette.ink.setStroke()
+            smile.stroke()
             return true
         }
         return image
@@ -581,185 +641,10 @@ struct CursorPreview: View {
     }
 }
 
-struct PackRow: View {
-    let pack: PointerPack
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(nsImage: PointerArtwork.pointerImage(pack: pack, size: 27))
-                .frame(width: 32, height: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(pack.title).font(.system(size: 13, weight: .semibold))
-                Text(pack.detail).font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color(nsColor: AppPalette.tide))
-            }
-        }
-        .padding(.vertical, 7)
-        .padding(.horizontal, 9)
-        .contentShape(Rectangle())
-        .background(
-            isSelected ? Color(nsColor: pack.color).opacity(0.14) : Color.clear,
-            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(isSelected ? Color(nsColor: pack.color).opacity(0.28) : Color.clear)
-        }
-    }
-}
-
 struct ContentView: View {
-    @EnvironmentObject private var store: ProofStore
-    @Environment(\.openSettings) private var openSettings
-
-    var body: some View {
-        VStack(spacing: 0) {
-        ScrollView {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 14) {
-                OctapussMascot()
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Octapuss")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                    Text("Dress up your pointer. Keep every click precise.")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                ScopeBadge(enabled: store.systemApplied || store.previewEnabled, title: store.statusTitle)
-            }
-
-            HStack(alignment: .top, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Pointer pals")
-                        .font(.system(size: 15, weight: .semibold))
-                    Text("Pick a mood for your tiny guide.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                    ForEach(PointerPack.allCases) { pack in
-                        Button {
-                            store.pack = pack
-
-                        } label: {
-                            PackRow(pack: pack, isSelected: store.selectedImportedID == nil && store.pack == pack)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(store.selectedImportedID == nil && store.pack == pack ? .isSelected : [])
-                    }
-                    Divider().padding(.vertical, 4)
-                    HStack {
-                        Text("Your cursors").font(.system(size: 13, weight: .semibold))
-                        Spacer()
-                        Button { store.chooseCursorFiles() } label: { Image(systemName: "plus") }
-                            .accessibilityLabel("Import cursor files")
-                    }
-                    if store.importedCursors.isEmpty {
-                        Text("Bring a new pal from the web.")
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
-                        Button("Import cursor…") { store.chooseCursorFiles() }
-                    } else {
-                        Picker("Imported cursor", selection: $store.selectedImportedID) {
-                            Text("Choose a cursor").tag(nil as UUID?)
-                            ForEach(store.importedCursors) { cursor in
-                                Text(cursor.name).tag(Optional(cursor.id))
-                            }
-                        }
-                        .labelsHidden()
-                        .accessibilityLabel("Imported cursor")
-                        if let cursor = store.selectedImportedCursor {
-                            HStack {
-                                Image(nsImage: cursor.image(longestSide: 28))
-                                Text(cursor.name).font(.system(size: 12, weight: .medium))
-                                    .lineLimit(2).help(cursor.name)
-                            }
-                            if cursor.firstFrameOnly {
-                                Text("ANI · first frame only").font(.system(size: 11)).foregroundStyle(.secondary)
-                            }
-                            Button("Remove from library") { store.removeSelectedImport() }
-                                .font(.system(size: 11))
-                        }
-                    }
-                    Text(".cur · .ani (first frame)\nUnzip sets before importing.")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                    Link("Find cursors on the web", destination: URL(string: "https://www.rw-designer.com/cursor-library")!)
-                        .font(.system(size: 11))
-                    Spacer(minLength: 0)
-                }
-                .frame(width: 184)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Pointer playground")
-                            .font(.system(size: 15, weight: .semibold))
-                        Spacer()
-                        Picker("", selection: $store.darkPreview) {
-                            Text("Light").tag(false)
-                            Text("Dark").tag(true)
-                        }
-                        .labelsHidden()
-                        .accessibilityLabel("Test background")
-                        .pickerStyle(.segmented)
-                        .frame(width: 128)
-                    }
-                    CursorPreview(store: store)
-                    HStack {
-                        Text("Size")
-                        Picker("", selection: $store.pointerSize) {
-                            ForEach(PointerSize.allCases) { size in
-                                Text(size.title).tag(size)
-                            }
-                        }
-                        .labelsHidden()
-                        .accessibilityLabel("Pointer size")
-                        .pickerStyle(.segmented)
-                        .frame(width: 240)
-                        Spacer()
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-
-        }
-        .padding(24)
-        }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 12) {
-                Button("Apply system arrow") { store.applySystemArrow() }
-                    .buttonStyle(.borderedProminent)
-                Button("Restore system pointer") { store.restore() }
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                if !store.previewEnabled {
-                    Button("Resume preview") { store.resumePreview() }
-                }
-                Button("Settings…") { openSettings() }
-                Spacer()
-            }
-                HStack(spacing: 7) {
-                    Image(systemName: "heart.fill")
-                        .foregroundStyle(Color(nsColor: AppPalette.blush))
-                    Text(store.diagnostic)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-        }
-        .frame(minWidth: 760, minHeight: 500)
-        .background(Color(nsColor: AppPalette.background))
-        .tint(Color(nsColor: AppPalette.lavender))
-    }
+    var body: some View { CursorLibraryView() }
 }
+
 
 struct SettingsView: View {
     @EnvironmentObject private var store: ProofStore
@@ -804,6 +689,12 @@ struct ProofCommands: Commands {
     @ObservedObject var store: ProofStore
 
     var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button("Import cursor files…") { store.chooseCursorFiles() }
+                .keyboardShortcut("o", modifiers: .command)
+            Button("Import unzipped set folder…") { store.chooseCursorFiles(asFolder: true) }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+        }
         CommandGroup(after: .appInfo) {
             Button("Restore system pointer") { store.restore() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
@@ -820,8 +711,8 @@ final class ProofAppDelegate: NSObject, NSApplicationDelegate {
             guard let window = NSApplication.shared.windows.first(where: { $0.title == "Octapuss" }) else {
                 return
             }
-            window.minSize = NSSize(width: 760, height: 500)
-            window.setContentSize(NSSize(width: 840, height: 560))
+            window.minSize = NSSize(width: 900, height: 640)
+            window.setContentSize(NSSize(width: 1080, height: 760))
             window.center()
             window.makeKeyAndOrderFront(nil)
         }
@@ -855,7 +746,7 @@ struct OctapussProofApp: App {
                     store.restore()
                 }
         }
-        .defaultSize(width: 840, height: 560)
+        .defaultSize(width: 1080, height: 760)
         .commands {
             ProofCommands(store: store)
         }

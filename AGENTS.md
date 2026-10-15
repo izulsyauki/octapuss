@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Octapuss has an independent app-local preview and an experimental native system-arrow backend requested on 15 October 2026. Source is `Phase0/OctapussProof.swift`, `Phase0/SystemCursorBackend.swift`, and `Phase0/CursorImport.swift`, with an app target in `Octapuss.xcodeproj`. Read `docs/SYSTEM_CURSOR.md` for the current scope, safety boundaries, and measured limits; `docs/CURSOR_IMPORT.md` covers CUR/ANI first-frame imports and their local library; `docs/REPAIR_VERIFICATION.md` records the earlier local repair.
+Octapuss has an independent app-local preview and an experimental native system-arrow backend requested on 15 October 2026. Source is `Phase0/OctapussProof.swift`, `Phase0/CursorLibraryView.swift`, `Phase0/SystemCursorBackend.swift`, and `Phase0/CursorImport.swift`, with an app target in `Octapuss.xcodeproj`. Read `docs/UI_REDESIGN.md` for the set library/gallery design, `docs/SYSTEM_CURSOR.md` for backend safety and measured limits, and `docs/CURSOR_IMPORT.md` for CUR/ANI first-frame imports. `docs/REPAIR_VERIFICATION.md` records the earlier local repair.
 
 When implementation begins, follow the proposed layout: `Octapuss/App`, `Features`, `Cursor`, `Platform`, `Models`, `Persistence`, and `Resources`, with focused tests in `OctapussTests`. Keep the app-local preview independent from any across-app cursor backend.
 
@@ -14,7 +14,7 @@ The shared Octapuss scheme is available. With full Xcode selected:
 xcodebuild -project Octapuss.xcodeproj -scheme Octapuss build
 ```
 
-With Command Line Tools, run `rtk proxy zsh scripts/build-phase0.sh`; add `--check` for safe/fake regression checks or `--probe-system` for read-only private API probing. `--check-system-live` intentionally changes system arrow registrations temporarily and kills only its own worker to test recovery; run it only for an authorized integration check. No XCTest target exists. Do not claim Xcode/XCTest validation from the Command Line Tools path. Global pointer hiding and overlays remain excluded.
+With Command Line Tools, run `rtk proxy zsh scripts/build-phase0.sh`; add `--check` for safe/fake regression checks, `--render-library` for offscreen app-only visual fixtures (see `docs/UI_REDESIGN.md`), or `--probe-system` for read-only private API probing. `--check-system-live` intentionally changes system arrow registrations temporarily and kills only its own worker to test recovery; run it only for an authorized integration check. No XCTest target exists. Do not claim Xcode/XCTest validation from the Command Line Tools path. Global pointer hiding and overlays remain excluded.
 
 ## Coding Style & Naming Conventions
 

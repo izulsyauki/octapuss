@@ -20,7 +20,7 @@ Octapuss combines a real AppKit cursor preview with an original cat-and-octopus 
 
 ## Operating Context
 
-- A native macOS utility with a main customization window, Settings, and menu-bar access.
+- A native macOS utility with a searchable cursor-set library, gallery of every imported cursor in the selected set, live playground, Settings, and menu-bar access.
 - The requested scope is **system arrow customization outside Octapuss**, with an explicit Apply action. The local playground remains independent.
 - The preview includes light and dark test surfaces, text, and a normal button for visual and click-position checks.
 - The app launches with across-app effects off and keeps Restore available.
@@ -28,7 +28,7 @@ Octapuss combines a real AppKit cursor preview with an original cat-and-octopus 
 ## Capabilities and Constraints
 
 - Three static pointer presets: Ink, Tide, and Blush.
-- Local import of Windows `.cur` files and `.ani` first-sequence-frame artwork, with a persistent cursor library, preserved hotspots/aspect ratio, preview, and explicit system-arrow application. ZIP sets must be unzipped first. Imported roles are not automatically mapped to macOS roles.
+- Local import of Windows `.cur` files and `.ani` first-sequence-frame artwork, with persistent cursor sets, preserved hotspots/aspect ratio, preview, and explicit system-arrow application. Multi-file and unzipped-folder imports form sets; every member appears in the gallery. ZIP sets must be unzipped first. Imported roles are not automatically mapped to macOS roles.
 - Small, Medium, and Large sizes with a hotspot that scales with the artwork.
 - App-local cursor rectangles use public AppKit APIs.
 - Across-app companion and cursor-hiding experiments have been removed from the app-local executable. Their historical findings remain in the feasibility report.

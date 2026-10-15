@@ -1,0 +1,322 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T10:43:59.181492+00:00",
+  "title": "Design System: Octapuss",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0514 297.69)",
+          "oklch(26% 0.0514 297.69)",
+          "oklch(38% 0.0514 297.69)",
+          "oklch(49% 0.0514 297.69)",
+          "oklch(61% 0.0514 297.69)",
+          "oklch(72% 0.0514 297.69)",
+          "oklch(84% 0.0514 297.69)",
+          "oklch(95% 0.0514 297.69)"
+        ]
+      },
+      "tide": {
+        "role": "secondary",
+        "displayName": "Tide",
+        "tonalRamp": [
+          "oklch(15% 0.0881 185.49)",
+          "oklch(26% 0.0881 185.49)",
+          "oklch(38% 0.0881 185.49)",
+          "oklch(49% 0.0881 185.49)",
+          "oklch(61% 0.0881 185.49)",
+          "oklch(72% 0.0881 185.49)",
+          "oklch(84% 0.0881 185.49)",
+          "oklch(95% 0.0881 185.49)"
+        ]
+      },
+      "blush": {
+        "role": "secondary",
+        "displayName": "Blush",
+        "tonalRamp": [
+          "oklch(15% 0.1482 0.95)",
+          "oklch(26% 0.1482 0.95)",
+          "oklch(38% 0.1482 0.95)",
+          "oklch(49% 0.1482 0.95)",
+          "oklch(61% 0.1482 0.95)",
+          "oklch(72% 0.1482 0.95)",
+          "oklch(84% 0.1482 0.95)",
+          "oklch(95% 0.1482 0.95)"
+        ]
+      },
+      "lavender": {
+        "role": "primary",
+        "displayName": "Lavender",
+        "tonalRamp": [
+          "oklch(15% 0.1609 295.14)",
+          "oklch(26% 0.1609 295.14)",
+          "oklch(38% 0.1609 295.14)",
+          "oklch(49% 0.1609 295.14)",
+          "oklch(61% 0.1609 295.14)",
+          "oklch(72% 0.1609 295.14)",
+          "oklch(84% 0.1609 295.14)",
+          "oklch(95% 0.1609 295.14)"
+        ]
+      },
+      "sunshine": {
+        "role": "tertiary",
+        "displayName": "Sunshine",
+        "tonalRamp": [
+          "oklch(15% 0.1260 75.01)",
+          "oklch(26% 0.1260 75.01)",
+          "oklch(38% 0.1260 75.01)",
+          "oklch(49% 0.1260 75.01)",
+          "oklch(61% 0.1260 75.01)",
+          "oklch(72% 0.1260 75.01)",
+          "oklch(84% 0.1260 75.01)",
+          "oklch(95% 0.1260 75.01)"
+        ]
+      },
+      "preview-light": {
+        "role": "neutral",
+        "displayName": "Preview Light",
+        "tonalRamp": [
+          "oklch(15% 0.0211 86.31)",
+          "oklch(26% 0.0211 86.31)",
+          "oklch(38% 0.0211 86.31)",
+          "oklch(49% 0.0211 86.31)",
+          "oklch(61% 0.0211 86.31)",
+          "oklch(72% 0.0211 86.31)",
+          "oklch(84% 0.0211 86.31)",
+          "oklch(95% 0.0211 86.31)"
+        ]
+      },
+      "preview-dark": {
+        "role": "neutral",
+        "displayName": "Preview Dark",
+        "tonalRamp": [
+          "oklch(15% 0.0335 294.36)",
+          "oklch(26% 0.0335 294.36)",
+          "oklch(38% 0.0335 294.36)",
+          "oklch(49% 0.0335 294.36)",
+          "oklch(61% 0.0335 294.36)",
+          "oklch(72% 0.0335 294.36)",
+          "oklch(84% 0.0335 294.36)",
+          "oklch(95% 0.0335 294.36)"
+        ]
+      },
+      "surface-light": {
+        "role": "neutral",
+        "displayName": "Surface Light",
+        "tonalRamp": [
+          "oklch(15% 0.0067 87.77)",
+          "oklch(26% 0.0067 87.77)",
+          "oklch(38% 0.0067 87.77)",
+          "oklch(49% 0.0067 87.77)",
+          "oklch(61% 0.0067 87.77)",
+          "oklch(72% 0.0067 87.77)",
+          "oklch(84% 0.0067 87.77)",
+          "oklch(95% 0.0067 87.77)"
+        ]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Surface Dark",
+        "tonalRamp": [
+          "oklch(15% 0.0378 295.26)",
+          "oklch(26% 0.0378 295.26)",
+          "oklch(38% 0.0378 295.26)",
+          "oklch(49% 0.0378 295.26)",
+          "oklch(61% 0.0378 295.26)",
+          "oklch(72% 0.0378 295.26)",
+          "oklch(84% 0.0378 295.26)",
+          "oklch(95% 0.0378 295.26)"
+        ]
+      },
+      "background-light": {
+        "role": "neutral",
+        "displayName": "Background Light",
+        "tonalRamp": [
+          "oklch(15% 0.0208 79.34)",
+          "oklch(26% 0.0208 79.34)",
+          "oklch(38% 0.0208 79.34)",
+          "oklch(49% 0.0208 79.34)",
+          "oklch(61% 0.0208 79.34)",
+          "oklch(72% 0.0208 79.34)",
+          "oklch(84% 0.0208 79.34)",
+          "oklch(95% 0.0208 79.34)"
+        ]
+      },
+      "sidebar-light": {
+        "role": "neutral",
+        "displayName": "Sidebar Light",
+        "tonalRamp": [
+          "oklch(15% 0.0155 315.96)",
+          "oklch(26% 0.0155 315.96)",
+          "oklch(38% 0.0155 315.96)",
+          "oklch(49% 0.0155 315.96)",
+          "oklch(61% 0.0155 315.96)",
+          "oklch(72% 0.0155 315.96)",
+          "oklch(84% 0.0155 315.96)",
+          "oklch(95% 0.0155 315.96)"
+        ]
+      },
+      "secondary-light": {
+        "role": "neutral",
+        "displayName": "Secondary Light",
+        "tonalRamp": [
+          "oklch(15% 0.0435 311.76)",
+          "oklch(26% 0.0435 311.76)",
+          "oklch(38% 0.0435 311.76)",
+          "oklch(49% 0.0435 311.76)",
+          "oklch(61% 0.0435 311.76)",
+          "oklch(72% 0.0435 311.76)",
+          "oklch(84% 0.0435 311.76)",
+          "oklch(95% 0.0435 311.76)"
+        ]
+      },
+      "secondary-dark": {
+        "role": "neutral",
+        "displayName": "Secondary Dark",
+        "tonalRamp": [
+          "oklch(15% 0.0434 300.57)",
+          "oklch(26% 0.0434 300.57)",
+          "oklch(38% 0.0434 300.57)",
+          "oklch(49% 0.0434 300.57)",
+          "oklch(61% 0.0434 300.57)",
+          "oklch(72% 0.0434 300.57)",
+          "oklch(84% 0.0434 300.57)",
+          "oklch(95% 0.0434 300.57)"
+        ]
+      },
+      "pointer-outline": {
+        "role": "neutral",
+        "displayName": "Pointer Outline",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(26% 0.0000 89.88)",
+          "oklch(38% 0.0000 89.88)",
+          "oklch(49% 0.0000 89.88)",
+          "oklch(61% 0.0000 89.88)",
+          "oklch(72% 0.0000 89.88)",
+          "oklch(84% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      },
+      "pointer-detail": {
+        "role": "neutral",
+        "displayName": "Pointer Detail",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(26% 0.0000 89.88)",
+          "oklch(38% 0.0000 89.88)",
+          "oklch(49% 0.0000 89.88)",
+          "oklch(61% 0.0000 89.88)",
+          "oklch(72% 0.0000 89.88)",
+          "oklch(84% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Rounded SwiftUI system design."
+      },
+      "brand": {
+        "displayName": "Brand",
+        "purpose": "Rounded SwiftUI system design."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Native system text; weights vary by context as documented."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Native system text; weights vary by context as documented."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Native system text; weights vary by context as documented."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Native system text; weights vary by context as documented."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Native system text; weights vary by context as documented."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Apply system arrow",
+      "kind": "button",
+      "description": "Panel approximation of the native bordered-prominent action; actual metrics and focus are macOS-owned.",
+      "html": "<button class=\"ds-apply\">Apply system arrow</button>",
+      "css": ".ds-apply { font: 13px -apple-system, sans-serif; background: rgb(54.9% 42% 84.7%); color: white; border: 1px solid transparent; border-radius: 6px; padding: 5px 10px; } .ds-apply:hover { filter: brightness(1.05); } .ds-apply:focus-visible { outline: 3px solid rgb(54.9% 42% 84.7% / .5); outline-offset: 2px; } .ds-apply:active { filter: brightness(.95); }"
+    },
+    {
+      "name": "Restore system pointer",
+      "kind": "button",
+      "description": "Panel approximation of the native secondary action; platform rendering remains authoritative.",
+      "html": "<button class=\"ds-restore\">Restore system pointer</button>",
+      "css": ".ds-restore { font: 13px -apple-system, sans-serif; background: rgb(100% 99.2% 97.3%); color: rgb(17.6% 14.1% 25.1%); border: 1px solid #bbb; border-radius: 6px; padding: 5px 10px; } .ds-restore:hover { filter: brightness(.98); } .ds-restore:focus-visible { outline: 3px solid rgb(54.9% 42% 84.7% / .5); outline-offset: 2px; } .ds-restore:active { filter: brightness(.95); }"
+    },
+    {
+      "name": "Search cursor sets",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "Light-appearance field specimen; native focus is authoritative.",
+      "html": "<input class=\"ds-search\" aria-label=\"Search cursor sets\" placeholder=\"Find a cursor set\">",
+      "css": ".ds-search { font: 13px -apple-system, sans-serif; color: rgb(17.6% 14.1% 25.1%); background: rgb(100% 99.2% 97.3%); border: 0; border-radius: 8px; padding: 9px; } .ds-search::placeholder { color: rgb(39.6% 33.7% 43.5%); } .ds-search:hover { outline: 1px solid rgb(54.9% 42% 84.7% / .3); } .ds-search:focus-visible { outline: 2px solid rgb(54.9% 42% 84.7%); }"
+    },
+    {
+      "name": "Selected set row",
+      "kind": "nav",
+      "refersTo": "set-row",
+      "description": "Selection fill, type, count, and checkmark; source artwork is omitted in this panel specimen.",
+      "html": "<button class=\"ds-set\" aria-pressed=\"true\"><span>Ink<small class=\"ds-count\">1 custom arrow</small></span><span aria-hidden=\"true\">\u2713</span></button>",
+      "css": ".ds-set { display: flex; justify-content: space-between; gap: 10px; width: 196px; text-align: left; font: 600 13px -apple-system, sans-serif; color: rgb(17.6% 14.1% 25.1%); background: rgb(54.9% 42% 84.7% / .13); border: 0; padding: 9px; border-radius: 12px; } .ds-count { display: block; margin-top: 3px; font-size: 11px; font-weight: 400; color: rgb(39.6% 33.7% 43.5%); } .ds-set:hover { filter: brightness(.98); } .ds-set:focus-visible { outline: 2px solid rgb(54.9% 42% 84.7%); } .ds-set:active { filter: brightness(.95); }"
+    },
+    {
+      "name": "Selected cursor tile",
+      "kind": "card",
+      "refersTo": "cursor-tile",
+      "description": "Light-preview tile specimen with neutral inline arrow symbol; actual imported/native artwork renders through NSImage.",
+      "html": "<button class=\"ds-tile\" aria-pressed=\"true\"><span class=\"ds-art\" aria-hidden=\"true\">\u2196</span><span>Arrow</span><small class=\"ds-detail\">Octapuss original</small><span class=\"ds-check\" aria-hidden=\"true\">\u2713</span></button>",
+      "css": ".ds-tile { position: relative; width: 150px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 10px; border: 2px solid rgb(54.9% 42% 84.7%); border-radius: 12px; background: rgb(100% 97.3% 91.4%); color: rgb(17.6% 14.1% 25.1%); font: 500 12px -apple-system, sans-serif; } .ds-art { display: grid; place-items: center; height: 48px; font-size: 34px; } .ds-detail { font-size: 10px; font-weight: 400; opacity: .78; } .ds-check { position: absolute; top: 8px; right: 8px; color: rgb(54.9% 42% 84.7%); } .ds-tile:hover { filter: brightness(.99); } .ds-tile:focus-visible { outline: 2px solid rgb(54.9% 42% 84.7%); outline-offset: 3px; } .ds-tile:active { filter: brightness(.96); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "A pocket collection of pointer pals",
+    "overview": "A pocket collection of pointer pals, grounded in a dependable Mac utility. Warm cream, pale lavender, mint, and rose give the cursor artwork room to feel personal. The original cat-eared octopus brings a small face and rounded tentacles to the brand mark.\n\nNative macOS controls, system type, direct selection, and readable status keep the work calm and precise. Character supports browsing and previewing; explicit Apply and visible Restore make the scope understandable.",
+    "keyCharacteristics": [
+      "Warm pastel surfaces with lavender selection.",
+      "Native system typography and familiar controls.",
+      "Original cat-and-octopus mark; cursor artwork stays the focal object.",
+      "Tonal separation with restrained outlines."
+    ],
+    "rules": [
+      {
+        "name": "The Preview Surface Rule",
+        "body": "The Light/Dark picker changes the cursor test surfaces independently of the application's macOS appearance.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do use the native macOS system font and rounded system headings.",
+      "Do preserve each imported filename, aspect ratio, and click point.",
+      "Do distinguish selected artwork, local preview, and the arrow actually applied.",
+      "Do show selection with an outline and checkmark as well as color.",
+      "Do keep Apply and Restore reachable outside scrolling content."
+    ],
+    "donts": [
+      "Don't turn ordinary buttons or focus affordances into mascot anatomy.",
+      "Don't imply that native text, hand, or resize samples are custom replacements.",
+      "Don't copy reference artwork or add website chrome to the native utility.",
+      "Don't animate or smooth pointer tracking; the click point must follow immediately."
+    ]
+  }
+}

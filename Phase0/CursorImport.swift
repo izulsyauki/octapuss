@@ -18,6 +18,10 @@ struct ImportedCursor: Codable, Identifiable {
     let hotspotX: Int
     let hotspotY: Int
     let firstFrameOnly: Bool
+    var collectionID: UUID? = nil
+    var collectionName: String? = nil
+
+    var setID: UUID { collectionID ?? id }
 
     func image(longestSide: CGFloat) -> NSImage {
         let scale = longestSide / CGFloat(max(width, height))
@@ -55,6 +59,12 @@ struct ImportedCursor: Codable, Identifiable {
                               x: CGFloat(hotspotX) * factor, y: CGFloat(hotspotY) * factor,
                               frames: 1, duration: 0, images: images)
     }
+}
+
+struct CursorCollection: Identifiable {
+    let id: UUID
+    let name: String
+    let cursors: [ImportedCursor]
 }
 
 enum CursorFileDecoder {

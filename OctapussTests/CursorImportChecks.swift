@@ -89,6 +89,35 @@ enum CursorImportChecks {
         let empty = try CursorLibrary(url: libraryURL).load()
         precondition(empty.isEmpty)
 
+        // Existing libraries had no collection keys: retain them as single-cursor sets.
+        var legacy = try JSONSerialization.jsonObject(with: JSONEncoder().encode([decoded])) as! [[String: Any]]
+        legacy[0].removeValue(forKey: "collectionID")
+        legacy[0].removeValue(forKey: "collectionName")
+        try JSONSerialization.data(withJSONObject: legacy).write(to: libraryURL)
+        let migrated = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+        precondition(migrated.cursorCollections.count == 1 && migrated.cursorCollections[0].id == decoded.id)
+
+        let setFolder = directory.appendingPathComponent("Synthetic cursor set")
+        try FileManager.default.createDirectory(at: setFolder, withIntermediateDirectories: true)
+        try pngCursor.write(to: setFolder.appendingPathComponent("Arrow.cur"))
+        try pngCursor.write(to: setFolder.appendingPathComponent("Select.cur"))
+        try dibCursor.write(to: setFolder.appendingPathComponent("Precision.cur"))
+        try ani.write(to: setFolder.appendingPathComponent("Working.ani"))
+        try Data("Ignored metadata".utf8).write(to: setFolder.appendingPathComponent("readme.txt"))
+        migrated.importCursorFolder(setFolder)
+        let set = migrated.selectedCollection!
+        precondition(set.name == "Synthetic cursor set" && set.cursors.count == 4,
+                     "Distinct filenames must survive even when artwork is identical")
+        precondition(Set(set.cursors.map(\.name)).contains("Arrow") && Set(set.cursors.map(\.name)).contains("Select"))
+        precondition(!migrated.systemApplied, "Importing a set must never apply it")
+        migrated.selectedImportedID = set.cursors[1].id
+        precondition(migrated.selectedCollection?.id == set.id)
+        migrated.removeSelectedImport()
+        precondition(migrated.selectedCollection?.id == set.id && migrated.selectedCollection?.cursors.count == 3,
+                     "Removing one cursor must keep the rest of its set selected")
+        let reloadedSets = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+        precondition(reloadedSets.selectedCollection?.id == set.id && reloadedSets.selectedCollection?.cursors.count == 3)
+
         if let path = ProcessInfo.processInfo.environment["OCTAPUSS_IMPORT_FIXTURE_DIR"] {
             let fixtures = URL(fileURLWithPath: path)
             try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)
@@ -102,6 +131,6 @@ enum CursorImportChecks {
                 print("Real import verified: \(item.name), \(item.width)x\(item.height), hotspot \(item.hotspotX),\(item.hotspotY), first-frame \(item.firstFrameOnly)")
             }
         }
-        print("Import checks passed: PNG/DIB CUR, mask transparency, ANI sequence, malformed files, scaled hotspots, persistence, deduplication, removal.")
+        print("Import checks passed: PNG/DIB CUR, mask transparency, ANI sequence, malformed files, scaled hotspots, persistence, deduplication, removal, legacy libraries, folder sets, set selection.")
     }
 }
