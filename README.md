@@ -39,6 +39,12 @@ Choose a preset or imported set and size, then press Apply to register it outsid
 
 While Octapuss is running, the applied artwork resumes after sleep or unlock. Manual Restore cancels automatic resumption. Quit restores the system pointer; this does not install persistence across logout or reboot.
 
+### Lock screen and persistence limits
+
+Custom cursors are not guaranteed on the macOS lock screen or protected authentication surfaces. macOS can force its own system cursor there; this is a platform limitation, also documented by [MaCursor](https://github.com/writronic/MaCursor#cursors-macursor-cannot-replace). Seeing the default cursor while locked does not mean your saved pack was removed.
+
+Octapuss temporarily restores its owned cursor registrations before sleep, screen lock, or session deactivation, remembers the exact applied pack, and automatically reapplies it after you return while the app remains running. Closing the main window keeps Octapuss running in the menu bar. **Restore system pointer** cancels automatic reapplication. Quitting or crashing restores the baseline; automatic startup and persistence across logout or reboot are not implemented. Physical lock-screen behavior and notification delivery across macOS versions remain unverified; see [sleep and lock persistence](docs/FULL_PACKS.md#sleep-and-lock-persistence).
+
 If Octapuss reports **Pointer color override**, open System Settings → Accessibility → Display → Pointer and choose **Reset Colors**, then Apply again. Custom macOS outline/fill colors can override cursor themes. Octapuss leaves those preferences unchanged and explains the conflict.
 
 Build with the installed Command Line Tools:
