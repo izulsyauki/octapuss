@@ -68,6 +68,8 @@ struct RegressionChecks {
         precondition(store.prepareToQuit() && !store.previewEnabled)
         view.onClick = nil
         checkSystemTransactions()
+        do { try CursorImportChecks.run() }
+        catch { preconditionFailure(error.localizedDescription) }
         print("Regression checks completed: preferences, 9 cursor variants, 3 layout sizes, 20 clicks, repeated Restore, reset, and quit.")
     }
 

@@ -28,14 +28,15 @@ Octapuss combines a real AppKit cursor preview with an original cat-and-octopus 
 ## Capabilities and Constraints
 
 - Three static pointer presets: Ink, Tide, and Blush.
+- Local import of Windows `.cur` files and `.ani` first-sequence-frame artwork, with a persistent cursor library, preserved hotspots/aspect ratio, preview, and explicit system-arrow application. ZIP sets must be unzipped first. Imported roles are not automatically mapped to macOS roles.
 - Small, Medium, and Large sizes with a hotspot that scales with the artwork.
 - App-local cursor rectangles use public AppKit APIs.
 - Across-app companion and cursor-hiding experiments have been removed from the app-local executable. Their historical findings remain in the feasibility report.
 - The experimental native backend uses dynamically resolved private cursor-registration APIs. It targets Arrow and, on macOS 26, ArrowS. Text, link-hand, resize, application-drawn, and protected cursors are outside this first theme's replacement scope.
 - Baseline backup, verified restoration, partial-failure rollback, and crash recovery are release requirements. Availability and registration success must be distinguished from human-visible cross-app verification.
-- Store only selected appearance preferences. Do not collect pointer history, typing, screenshots, clicked content, or application activity.
+- Store selected appearance preferences and local normalized copies of explicitly imported cursor artwork. Do not collect pointer history, typing, screenshots, clicked content, or application activity.
 - Use SwiftUI for the interface and AppKit at native cursor boundaries. The current proof builds with Command Line Tools; a full Xcode project remains future work.
-- Animated pointers, trails, sound, import/export, editing, per-app rules, accounts, cloud sync, and automatic global cursor-role detection are deferred.
+- Animated playback, trails, sound, export, editing, per-app rules, accounts, cloud sync, and automatic global cursor-role detection are deferred.
 
 ## Brand Commitments
 

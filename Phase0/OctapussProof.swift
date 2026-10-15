@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 // Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4
 // Native utility · genre: playful-operate · theme: DESIGN.md locked
@@ -82,7 +83,10 @@ final class ProofStore: ObservableObject {
     private let allowsSystemCustomization: Bool
 
     @Published var pack: PointerPack {
-        didSet { defaults.set(pack.rawValue, forKey: "selectedPack") }
+        didSet {
+            defaults.set(pack.rawValue, forKey: "selectedPack")
+            selectedImportedID = nil
+        }
     }
 
     @Published var pointerSize: PointerSize {
@@ -102,8 +106,15 @@ final class ProofStore: ObservableObject {
     @Published private(set) var systemColorOverride = false
     private var systemSession: SystemCursorSession?
     private var recoveredOnLaunch = false
+    @Published private(set) var importedCursors: [ImportedCursor] = []
+    @Published var selectedImportedID: UUID? {
+        didSet { defaults.set(selectedImportedID?.uuidString, forKey: "selectedImportedCursor") }
+    }
+    private var library: CursorLibrary?
+    var selectedImportedCursor: ImportedCursor? { importedCursors.first { $0.id == selectedImportedID } }
+    var selectedTitle: String { selectedImportedCursor?.name ?? pack.title }
 
-    init(defaults: UserDefaults = .standard, allowsSystemCustomization: Bool = true) {
+    init(defaults: UserDefaults = .standard, allowsSystemCustomization: Bool = true, libraryURL: URL? = nil) {
         self.defaults = defaults
         self.allowsSystemCustomization = allowsSystemCustomization
         pack = PointerPack(rawValue: defaults.string(forKey: "selectedPack") ?? "") ?? .ink
@@ -113,6 +124,73 @@ final class ProofStore: ObservableObject {
         if systemColorOverride {
             diagnostic = "macOS pointer colors override themes. In System Settings > Accessibility > Display > Pointer, choose Reset Colors, then Apply."
         }
+        if allowsSystemCustomization || libraryURL != nil {
+            let candidate = CursorLibrary(url: libraryURL ?? CursorLibrary.defaultURL)
+            do {
+                importedCursors = try candidate.load()
+                selectedImportedID = UUID(uuidString: defaults.string(forKey: "selectedImportedCursor") ?? "")
+                if selectedImportedCursor == nil { selectedImportedID = nil }
+                library = candidate
+            } catch { diagnostic = error.localizedDescription }
+        }
+    }
+
+    func chooseCursorFiles() {
+        let panel = NSOpenPanel()
+        panel.title = "Import cursor files"
+        panel.message = "Choose .cur or .ani files. Unzip downloaded sets first. Animated cursors use their first frame."
+        panel.prompt = "Import"
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [UTType(filenameExtension: "cur"), UTType(filenameExtension: "ani")].compactMap { $0 }
+        panel.begin { [weak self] response in
+            guard response == .OK else { return }
+            self?.importCursorFiles(panel.urls)
+        }
+    }
+
+    func importCursorFiles(_ urls: [URL]) {
+        guard let library else {
+            diagnostic = "Your saved cursor library is unavailable. Your downloads have not been changed."
+            return
+        }
+        guard urls.count <= 16 else {
+            diagnostic = "Import up to 16 cursor files at a time. Unzip sets first."
+            return
+        }
+        var next = importedCursors
+        var chosen: UUID?
+        var errors: [String] = []
+        for url in urls {
+            do {
+                let cursor = try CursorFileDecoder.decode(url: url)
+                if let duplicate = next.first(where: {
+                    $0.png == cursor.png && $0.hotspotX == cursor.hotspotX && $0.hotspotY == cursor.hotspotY
+                        && $0.firstFrameOnly == cursor.firstFrameOnly
+                }) { chosen = chosen ?? duplicate.id }
+                else { next.append(cursor); chosen = chosen ?? cursor.id }
+            } catch { errors.append("\(url.lastPathComponent): \(error.localizedDescription)") }
+        }
+        do {
+            if chosen != nil {
+                try library.save(next)
+                importedCursors = next
+                selectedImportedID = chosen
+                diagnostic = "\(selectedTitle) is ready to preview. Choose Apply system arrow to use it outside Octapuss."
+            }
+            if let first = errors.first { diagnostic = "\(errors.count) file(s) could not be imported. \(first)" }
+        } catch { diagnostic = "Import was not saved: \(error.localizedDescription)" }
+    }
+
+    func removeSelectedImport() {
+        guard let id = selectedImportedID, let library else { return }
+        do {
+            let next = importedCursors.filter { $0.id != id }
+            try library.save(next)
+            importedCursors = next
+            selectedImportedID = nil
+            diagnostic = "Removed from your library. The applied system arrow and original download are unchanged."
+        } catch { diagnostic = error.localizedDescription }
     }
 
     var statusTitle: String {
@@ -149,6 +227,10 @@ final class ProofStore: ObservableObject {
                 if name.hasSuffix("ArrowS"), ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 {
                     continue
                 }
+                if let imported = selectedImportedCursor {
+                    replacements.append(try imported.snapshot(name: name, longestSide: pointerSize.points))
+                    continue
+                }
                 let images = try [1.0, 2.0, 5.0, 10.0].map { scale -> Data in
                     let image = PointerArtwork.pointerImage(pack: pack, size: pointerSize.points * scale)
                     guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
@@ -164,7 +246,7 @@ final class ProofStore: ObservableObject {
             try session.apply(replacements)
             systemApplied = true
             previewEnabled = true
-            systemAppliedLabel = "\(pack.title) · \(pointerSize.title)"
+            systemAppliedLabel = "\(selectedTitle) · \(pointerSize.title)"
             systemNeedsRecovery = false
             diagnostic = "System arrow applied. Text, hand, and resize cursors stay native."
         } catch {
@@ -325,18 +407,22 @@ final class CursorPreviewNSView: NSView {
     required init?(coder: NSCoder) { nil }
     override var isFlipped: Bool { true }
 
-    func configure(pack: PointerPack, size: PointerSize, dark: Bool, enabled: Bool, clicks: Int) {
-        let cursorChanged = self.pack != pack || pointerSize != size || customEnabled != enabled
-        if self.pack != pack {
-            portrait = PointerArtwork.pointerImage(pack: pack, size: 72)
+    private var importedID: UUID?
+
+    func configure(pack: PointerPack, size: PointerSize, dark: Bool, enabled: Bool, clicks: Int, imported: ImportedCursor? = nil) {
+        let artworkChanged = self.pack != pack || importedID != imported?.id
+        let cursorChanged = artworkChanged || pointerSize != size || customEnabled != enabled
+        if artworkChanged {
+            portrait = imported?.image(longestSide: 72) ?? PointerArtwork.pointerImage(pack: pack, size: 72)
         }
+        importedID = imported?.id
         self.pack = pack
         pointerSize = size
         darkPreview = dark
         customEnabled = enabled
         clickCount = clicks
         if cursorChanged {
-            previewCursor = enabled ? PointerArtwork.cursor(pack: pack, size: size.points) : .arrow
+            previewCursor = enabled ? (imported?.cursor(longestSide: size.points) ?? PointerArtwork.cursor(pack: pack, size: size.points)) : .arrow
             window?.invalidateCursorRects(for: self)
             if let window, window.isKeyWindow,
                visibleRect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
@@ -391,8 +477,11 @@ final class CursorPreviewNSView: NSView {
         let halo = NSRect(x: 22, y: (bounds.height - 112) / 2, width: 112, height: 112)
         AppPalette.sunshine.withAlphaComponent(darkPreview ? 0.18 : 0.30).setFill()
         NSBezierPath(ovalIn: halo).fill()
+        let portraitScale = 76 / max(portrait.size.width, portrait.size.height)
+        let portraitSize = NSSize(width: portrait.size.width * portraitScale, height: portrait.size.height * portraitScale)
         portrait.draw(
-            in: NSRect(x: 40, y: (bounds.height - 76) / 2, width: 76, height: 76),
+            in: NSRect(x: 78 - portraitSize.width / 2, y: (bounds.height - portraitSize.height) / 2,
+                       width: portraitSize.width, height: portraitSize.height),
             from: .zero, operation: .sourceOver, fraction: customEnabled ? 1 : 0.4,
             respectFlipped: true, hints: nil
         )
@@ -433,7 +522,7 @@ struct CursorPreviewBridge: NSViewRepresentable {
     func updateNSView(_ view: CursorPreviewNSView, context: Context) {
         view.onClick = { store.recordClick() }
         view.configure(pack: store.pack, size: store.pointerSize, dark: store.darkPreview,
-                       enabled: store.previewEnabled, clicks: store.clickCount)
+                       enabled: store.previewEnabled, clicks: store.clickCount, imported: store.selectedImportedCursor)
     }
 
     static func dismantleNSView(_ view: CursorPreviewNSView, coordinator: ()) {
@@ -470,7 +559,11 @@ struct ScopeBadge: View {
                 .frame(width: 8, height: 8)
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(title)
         }
+        .frame(maxWidth: 260, alignment: .trailing)
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
         .background(Color(nsColor: AppPalette.surface), in: Capsule())
@@ -525,6 +618,7 @@ struct ContentView: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
+        VStack(spacing: 0) {
         ScrollView {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 14) {
@@ -552,11 +646,48 @@ struct ContentView: View {
                             store.pack = pack
 
                         } label: {
-                            PackRow(pack: pack, isSelected: store.pack == pack)
+                            PackRow(pack: pack, isSelected: store.selectedImportedID == nil && store.pack == pack)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityAddTraits(store.pack == pack ? .isSelected : [])
+                        .accessibilityAddTraits(store.selectedImportedID == nil && store.pack == pack ? .isSelected : [])
                     }
+                    Divider().padding(.vertical, 4)
+                    HStack {
+                        Text("Your cursors").font(.system(size: 13, weight: .semibold))
+                        Spacer()
+                        Button { store.chooseCursorFiles() } label: { Image(systemName: "plus") }
+                            .accessibilityLabel("Import cursor files")
+                    }
+                    if store.importedCursors.isEmpty {
+                        Text("Bring a new pal from the web.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                        Button("Import cursor…") { store.chooseCursorFiles() }
+                    } else {
+                        Picker("Imported cursor", selection: $store.selectedImportedID) {
+                            Text("Choose a cursor").tag(nil as UUID?)
+                            ForEach(store.importedCursors) { cursor in
+                                Text(cursor.name).tag(Optional(cursor.id))
+                            }
+                        }
+                        .labelsHidden()
+                        .accessibilityLabel("Imported cursor")
+                        if let cursor = store.selectedImportedCursor {
+                            HStack {
+                                Image(nsImage: cursor.image(longestSide: 28))
+                                Text(cursor.name).font(.system(size: 12, weight: .medium))
+                                    .lineLimit(2).help(cursor.name)
+                            }
+                            if cursor.firstFrameOnly {
+                                Text("ANI · first frame only").font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
+                            Button("Remove from library") { store.removeSelectedImport() }
+                                .font(.system(size: 11))
+                        }
+                    }
+                    Text(".cur · .ani (first frame)\nUnzip sets before importing.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    Link("Find cursors on the web", destination: URL(string: "https://www.rw-designer.com/cursor-library")!)
+                        .font(.system(size: 11))
                     Spacer(minLength: 0)
                 }
                 .frame(width: 184)
@@ -593,6 +724,10 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity)
             }
 
+        }
+        .padding(24)
+        }
+
             Divider()
 
             VStack(alignment: .leading, spacing: 10) {
@@ -617,12 +752,12 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .padding(24)
         .frame(minWidth: 760, minHeight: 500)
         .background(Color(nsColor: AppPalette.background))
         .tint(Color(nsColor: AppPalette.lavender))
-        }
     }
 }
 

@@ -71,6 +71,12 @@ struct SystemCursorLiveCheck {
 
     @MainActor
     static func replacements() throws -> [CursorSnapshot] {
+        if let path = ProcessInfo.processInfo.environment["OCTAPUSS_LIVE_CURSOR_FILE"] {
+            let cursor = try CursorFileDecoder.decode(url: URL(fileURLWithPath: path))
+            return try ["com.apple.coregraphics.Arrow", "com.apple.coregraphics.ArrowS"].map {
+                try cursor.snapshot(name: $0, longestSide: 32)
+            }
+        }
         let images = try [1.0, 2.0, 5.0, 10.0].map { scale -> Data in
             let image = PointerArtwork.pointerImage(pack: .tide, size: 32 * scale)
             guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),

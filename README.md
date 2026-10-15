@@ -20,6 +20,17 @@ The requested product direction is **native system arrow customization**. The ne
 | [Test plan](docs/TEST_PLAN.md) | Pointer correctness, compatibility, permissions, and release checks |
 | [Model handoff](docs/MODEL_HANDOFF.md) | A ready-to-use prompt for the model that will implement the plan |
 
+## Use downloaded cursors
+
+1. Download a `.cur` or `.ani` file from [RW Designer's cursor library](https://www.rw-designer.com/cursor-library). If you download a ZIP set, unzip it first.
+2. In Octapuss, choose **Import cursor…** or **+** under **Your cursors** and select up to 16 files.
+3. Select an imported cursor, choose a size, and try it in the playground.
+4. Click **Apply system arrow** to use it outside Octapuss. **Restore system pointer** returns to the saved baseline.
+
+`.cur` files retain their click hotspot and aspect ratio. `.ani` files use their **first sequence frame only**; animation is not played. Importing a whole set does not map its hand/text/resize roles: the selected file replaces the system arrow only. The app stores its own local image copy, so moving the original download does not break the library. Remove from library leaves the download and any applied system arrow unchanged.
+
+See [import formats, limits, and verification](docs/CURSOR_IMPORT.md).
+
 ## Phase 0 proof
 
 Choose a preset and size, then press **Apply system arrow** to register it outside Octapuss. Changes to the selection remain a preview until Apply is pressed again. Restore restores the saved system-arrow baseline and pauses the local preview; Resume reactivates only the local preview. A durable backup and temporary crash-recovery subprocess protect applied registrations. Nothing is installed at login.

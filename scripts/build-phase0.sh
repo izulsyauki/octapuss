@@ -38,8 +38,10 @@ if [[ "${1:-}" == "--check" ]]; then
         -module-cache-path "$module_cache" \
         -framework AppKit -framework SwiftUI \
         "$project_root/Phase0/OctapussProof.swift" \
+        "$project_root/Phase0/CursorImport.swift" \
         "$project_root/Phase0/SystemCursorBackend.swift" \
         "$project_root/OctapussTests/RegressionChecks.swift" \
+        "$project_root/OctapussTests/CursorImportChecks.swift" \
         -o "$module_cache/RegressionChecks"
     "$module_cache/RegressionChecks"
     exit
@@ -60,6 +62,7 @@ if [[ "${1:-}" == "--check-system-live" ]]; then
         -target "$architecture-apple-macos14.0" -sdk "$sdk_path" \
         -module-cache-path "$module_cache" -framework AppKit -framework SwiftUI \
         "$project_root/Phase0/OctapussProof.swift" \
+        "$project_root/Phase0/CursorImport.swift" \
         "$project_root/Phase0/SystemCursorBackend.swift" \
         "$project_root/OctapussTests/SystemCursorLiveCheck.swift" \
         -o "$module_cache/SystemCursorLiveCheck"
@@ -79,6 +82,7 @@ xcrun swiftc \
     -framework AppKit \
     -framework SwiftUI \
     "$project_root/Phase0/OctapussProof.swift" \
+    "$project_root/Phase0/CursorImport.swift" \
     "$project_root/Phase0/SystemCursorBackend.swift" \
     -o "$executable_path"
 
