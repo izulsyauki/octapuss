@@ -2,6 +2,12 @@
 
 **Current extension:** imported packs now apply all assigned, available roles, including animation. See [full-pack scope and current evidence](FULL_PACKS.md). The arrow-only milestone and its historical evidence below are retained for context. Text/link operation has since been confirmed by the user; 56-slot Apply/Restore and owned-worker crash recovery passed on this host.
 
+## Background helper packaging
+
+Registry reads and crash recovery run through `Contents/Helpers/OctapussCursorHelper.app`, a bundled child executable with its own identifier and `LSBackgroundOnly = true`. Previously these modes launched the regular Octapuss executable, whose AppKit initialization could register another Dock application. The helper starts with prohibited activation policy, cannot create windows, and rejects invalid arguments without entering SwiftUI. A missing packaged helper fails explicitly rather than launching the interactive app as a fallback. Standalone test runners retain their command-line dispatch.
+
+Both the Command Line Tools builder and the Xcode app build phase package and sign the helper before signing the parent app. It is not a login item or independently installed app. Reproduce packaged read-only checks with `rtk proxy python3 OctapussTests/CursorHelperChecks.py /tmp/octapuss-phase0/Octapuss.app`: policy and zero windows, invalid arguments, a real registry read, and watchdog readiness/EOF exit without a cursor journal or system mutation. Full Xcode execution remains untested on this host.
+
 The user changed the requested scope from app-local preview to system-wide native-style customization on 15 October 2026. The first backend milestone replaces registered standard arrow slots while preserving native text, hand, resize, busy, and application-owned cursors.
 
 ## API research

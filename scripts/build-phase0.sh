@@ -110,5 +110,6 @@ xcrun swiftc \
     "$project_root/Phase0/SystemCursorBackend.swift" \
     -o "$executable_path"
 
+sh "$project_root/scripts/package-cursor-helper.sh" "$executable_path" "$project_root/Phase0/CursorHelper-Info.plist" "$contents_path"
 codesign --force --sign - --timestamp=none "$app_path"
 print "$app_path"

@@ -20,10 +20,21 @@
         A00000000000000000000006 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000011, A00000000000000000000013, A00000000000000000000015, A00000000000000000000017); runOnlyForDeploymentPostprocessing = 0; };
         A00000000000000000000007 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
         A00000000000000000000008 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        A00000000000000000000019 = {
+            isa = PBXShellScriptBuildPhase;
+            buildActionMask = 2147483647;
+            files = ();
+            inputPaths = ("$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)", "$(SRCROOT)/Phase0/CursorHelper-Info.plist", "$(SRCROOT)/scripts/package-cursor-helper.sh");
+            outputPaths = ("$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/OctapussCursorHelper.app");
+            name = "Package background cursor helper";
+            runOnlyForDeploymentPostprocessing = 0;
+            shellPath = /bin/sh;
+            shellScript = "sh \"$SRCROOT/scripts/package-cursor-helper.sh\" \"$TARGET_BUILD_DIR/$EXECUTABLE_PATH\" \"$SRCROOT/Phase0/CursorHelper-Info.plist\" \"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH\"\n";
+        };
         A00000000000000000000009 = {
             isa = PBXNativeTarget;
             buildConfigurationList = A0000000000000000000000B;
-            buildPhases = (A00000000000000000000006, A00000000000000000000007, A00000000000000000000008);
+            buildPhases = (A00000000000000000000006, A00000000000000000000007, A00000000000000000000008, A00000000000000000000019);
             buildRules = ();
             dependencies = ();
             name = Octapuss;
