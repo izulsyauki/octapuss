@@ -106,6 +106,15 @@ enum CursorPackChecks {
         let cursors = try names.map { try CursorFileDecoder.decode(data: red, name: $0) }
         precondition(cursors.compactMap(\.effectiveRole).count == 15)
         precondition(CursorRole.infer(from: "minecraft diamond") == nil, "Unknown filenames must not guess a role")
+        precondition(CursorRole.infer(from: "goku - normal") == .arrow)
+        precondition(CursorRole.infer(from: "goku - text ") == .text)
+        precondition(CursorRole.infer(from: "goku - horizontal") == .horizontalResize)
+        precondition(CursorRole.infer(from: "goku - vertical") == .verticalResize)
+        precondition(CursorRole.infer(from: "goku - d1") == .diagonalNWSE)
+        precondition(CursorRole.infer(from: "goku - d2") == .diagonalNESW)
+        precondition(CursorRole.infer(from: "normal goku") == nil)
+        precondition(CursorRole.infer(from: "goku - normal artwork") == nil,
+                     "Theme suffix detection must require a complete recognized role")
         let plan = CursorPackPlan(cursors: cursors)
         precondition(plan.mapped.count == 13 && plan.unmapped.count == 2)
         let slots = Set(plan.mapped.flatMap { $0.effectiveRole!.slotNames })
@@ -154,6 +163,39 @@ enum CursorPackChecks {
             precondition(abs(busy.systemTimeline.duration - 0.1) < 0.000001)
             precondition(busy.systemTimeline.frames.count == 24 && working.systemTimeline.frames.count == 18)
             print("Minecraft pack decoded: 15 files, 13 native roles, background18/busy24 frames at100ms.")
+        }
+        if let folder = ProcessInfo.processInfo.environment["OCTAPUSS_GOKU_FIXTURE_PATH"] {
+            let directory = URL(fileURLWithPath: folder)
+            let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .filter { ["cur", "ani"].contains($0.pathExtension.lowercased()) }
+            let imported = try files.map { try CursorFileDecoder.decode(url: $0) }
+            precondition(imported.count == 15 && imported.allSatisfy { $0.effectiveRole != nil })
+            let plan = CursorPackPlan(cursors: imported)
+            precondition(plan.mapped.count == 13 && plan.unmapped.count == 2)
+            let slots = Set(plan.mapped.flatMap(\.targetSlotNames))
+            let api = FakeSystemCursorAPI(snapshots: try slots.map { try first.snapshot(name: $0, longestSide: 32) })
+            let result = try plan.replacements(using: api, size: 32)
+            precondition(result.roleCount == 13)
+            let suite = "octapuss-goku-\(UUID())"
+            let defaults = UserDefaults(suiteName: suite)!
+            let libraryURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json")
+            defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: libraryURL) }
+            let store = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+            store.importCursorFolder(directory)
+            precondition(store.selectedCollection?.cursors.count == 15 && store.selectedPackPlan.mapped.count == 13)
+            let cursor = store.importedCursors.first { $0.effectiveRole == .text }!
+            store.selectedImportedID = cursor.id
+            store.assignSelectedRole(CursorRole.openHand.rawValue)
+            let reopened = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+            precondition(reopened.selectedImportedCursor?.effectiveRole == .openHand,
+                         "Manual roles must persist and override filename detection")
+            reopened.assignSelectedRole("unassigned")
+            precondition(reopened.selectedImportedCursor?.effectiveRole == nil)
+            reopened.assignSelectedRole(CursorRole.text.rawValue)
+            reopened.importCursorFolder(directory)
+            precondition(reopened.importedCursors.first { $0.id == cursor.id }?.roleOverride == CursorRole.text.rawValue,
+                         "Folder updates must preserve a manually selected role")
+            print("Son Goku checks passed: 15 files, 13 system roles, \(result.snapshots.count) slots; manual assignment, exclusion, relaunch, and reimport.")
         }
         print("Pack checks passed: role matching, duplicate blocking, ANI order/rates/strips, role overrides, all-slot rollback and restoration.")
     }

@@ -84,10 +84,10 @@ enum CursorRole: String, Codable, CaseIterable, Identifiable {
             (.text, ["textselect", "text", "ibeam", "xterm"]),
             (.handwriting, ["handwriting", "pen", "pencil"]),
             (.unavailable, ["unavailable", "notallowed", "forbidden", "no", "crossedcircle"]),
-            (.verticalResize, ["verticalresize", "sizens", "nsresize", "resizeupdown"]),
-            (.horizontalResize, ["horizontalresize", "sizewe", "ewresize", "resizeleftright"]),
-            (.diagonalNWSE, ["diagonalresize1", "sizenwse", "nwseresize"]),
-            (.diagonalNESW, ["diagonalresize2", "sizenesw", "neswresize"]),
+            (.verticalResize, ["verticalresize", "vertical", "sizens", "nsresize", "resizeupdown"]),
+            (.horizontalResize, ["horizontalresize", "horizontal", "sizewe", "ewresize", "resizeleftright"]),
+            (.diagonalNWSE, ["diagonalresize1", "d1", "sizenwse", "nwseresize"]),
+            (.diagonalNESW, ["diagonalresize2", "d2", "sizenesw", "neswresize"]),
             (.move, ["move", "sizeall", "fleur", "allscroll"]),
             (.alternate, ["alternateselect", "alternate", "uparrow"]),
             (.link, ["linkselect", "link", "hand", "pointinghand", "pointer", "hand2"]),
@@ -96,7 +96,14 @@ enum CursorRole: String, Codable, CaseIterable, Identifiable {
             (.contextual, ["contextmenu", "contextual"]), (.zoomIn, ["zoomin"]),
             (.zoomOut, ["zoomout"]), (.cell, ["cell", "cellselect"]), (.verticalText, ["verticaltext"])
         ]
-        return names.first { $0.1.contains(key) }?.0
+        if let exact = names.first(where: { $0.1.contains(key) }) { return exact.0 }
+        // Theme prefixes are common in downloads ("goku - normal"). Only
+        // recognize an exact role after a spaced separator, never arbitrary words.
+        let sections = filename.components(separatedBy: " - ")
+        guard sections.count > 1, let suffix = sections.last else { return nil }
+        let suffixKey = suffix.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }.joined()
+        return names.first { $0.1.contains(suffixKey) }?.0
     }
 
     static func role(forNativeSlot slot: String) -> CursorRole? {

@@ -31,6 +31,12 @@ The requested product direction is **native system cursor customization**. The b
 
 Native property-list `.cursor` themes such as **Anya.cursor** can also be imported through **Import cursor files…**, one theme at a time. Their animations and supported native roles become one selectable set. See [native theme support and verification](docs/NATIVE_THEMES.md).
 
+### Assign cursor roles manually
+
+Select an imported pack, click a cursor tile, then choose its role from **Use for** above the gallery. For example, assign the normal pointer to **Normal select**, the text pointer to **Text select**, and the hand to **Link select**. Choose **Unassigned** to exclude a file. Assignments save immediately and survive relaunch and matching folder updates; click **Apply pack** when ready to update the system cursor.
+
+Filename detection recognizes exact role names and theme prefixes separated by ` - `, such as `goku - normal`, `goku - text`, `goku - horizontal`, `goku - vertical`, `goku - d1` (NW–SE), and `goku - d2` (NE–SW). Unknown filenames stay unassigned. Manual choices always take priority. Avoid assigning two files to the same role: overlapping system slots block Apply with an explanation. Windows handwriting and alternate-select lack global macOS slots; choose a supported role if you want to repurpose their artwork.
+
 The redesigned library shows every imported cursor in the selected set. Built-in templates show their custom arrow plus native macOS shapes, clearly labeled as unchanged. See [the redesign and references](docs/UI_REDESIGN.md) and [import formats, limits, and verification](docs/CURSOR_IMPORT.md).
 
 ## Delete a cursor pack

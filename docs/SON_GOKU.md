@@ -1,0 +1,11 @@
+# Son Goku role matching and manual assignment
+
+The supplied `cursor-example/son-goku` folder uses filenames such as `goku - normal.ani`, `goku - text .ani`, and `goku - d1.ani`. Earlier detection required the entire normalized filename to be a role, so the theme prefix left these files unassigned.
+
+Detection now checks the complete filename first, then an exact role suffix following a spaced ` - ` separator. Short resize names `horizontal`, `vertical`, `d1` (NW–SE), and `d2` (NE–SW) are recognized. Arbitrary words inside filenames do not trigger matching. Unknown names remain unassigned rather than guessed. Folder import reads the 15 ANI files; the accompanying `.crs` metadata is not imported or executed.
+
+Manual mapping is independent of filename detection: select any imported cursor tile and choose **Use for** above the gallery. Supported roles apply through **Apply pack**. **Unassigned** explicitly excludes a file. Manual choices are saved atomically, override detected/native roles, and survive relaunch and matching-folder updates. Duplicate overlapping roles block Apply. Handwriting and alternate-select remain labeled as lacking a global macOS equivalent; users can assign their artwork to another supported role.
+
+Safe checks passed all 15 supplied files, 13 mapped roles, and 56 planned slots, plus explicit reassignment, exclusion, persistence, and folder reimport. Negative checks reject role-like words inside unrelated names. Run `OCTAPUSS_GOKU_FIXTURE_PATH=/absolute/path/son-goku rtk proxy zsh scripts/build-phase0.sh --check` to include the fixture checks. The original artwork remains local, untracked input and is not bundled with Octapuss.
+
+Real integration passed Apply/Restore for all 56 slots, verifying baseline pixels, dimensions, hotspots, and journal removal. SIGKILL of an owned test worker also restored every slot. The updated app recognized the user's existing Son Goku set without reimporting it. UI automation manually excluded the text cursor with **Unassigned**, then saved **Text select** again and applied the pack. The final app reports **System pack: son-goku · 13 roles** and **56 system slots** at the selected Large size. Full Xcode/XCTest, other OS/hardware versions, and visual observation of every external cursor context remain untested.
