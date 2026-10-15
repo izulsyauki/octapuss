@@ -1,29 +1,29 @@
-<!-- Hallmark implementation self-critique: Philosophy 4 · Hierarchy 4 · Execution 4 · Specificity 5 · Restraint 5 · Variety 4. -->
+<!-- Hallmark implementation self-critique: Philosophy 5 · Hierarchy 5 · Execution 4 · Specificity 5 · Restraint 4 · Variety 4. -->
 # Octapuss design direction
 
-Phase 0 implements this direction as a native SwiftUI/AppKit feasibility app. Product-scale screens remain proposed until the cursor route is selected.
+Phase 0 implements this direction as a native SwiftUI/AppKit app-local pointer playground. App-local customization is the selected product scope; across-app experiments have been removed from the executable. Preserve the existing visual identity and tokens during behavioral repairs.
 
 ## Direction
 
-**A playful character in a calm native utility.** The pointer is the focal object. The interface uses familiar macOS controls, system typography, generous test space, and a small amount of brand color.
+**A pocket pointer playground with a dependable Mac utility underneath.** The pointer remains the focal object, surrounded by warm cream, berry, mint, lavender, and sunshine accents. Familiar macOS controls, clear status, and precise cursor behavior keep the joy trustworthy.
 
-The mascot is an abstract rounded cat head, two ears, and simplified tentacle feet. It appears once in onboarding or an empty state and in the app icon. The menu-bar version becomes a monochrome silhouette with no tiny eyes or cheeks. Avoid making every control a paw or tentacle.
+The mascot is an abstract rounded cat head, two ears, and simplified tentacle feet. It welcomes the user once in the window header and may become the app icon. The menu-bar version stays a monochrome system symbol until a production template asset exists. Avoid turning ordinary controls into paws or tentacles.
 
 This is a native workbench layout, rather than a marketing page. It has no hero, site navigation, or footer. Standard window chrome, buttons, menus, and focus affordances remain part of the design.
 
 ## Main customization window
 
-Phase 0 default: **780 × 520 pt**. Minimum: **680 × 440 pt**. Later product screens should validate these dimensions again when their content exists.
+Current default: **840 × 560 pt**. Minimum: **760 × 500 pt**, with scrollable main content. Whole-window interaction at the minimum size remains untested.
 
 ```text
-Octapuss                         Customization off         [Enable…]
+[mascot] Octapuss               App-local preview
+  Dress up your pointer. Keep every click precise.
 
-Pointer presets       Preview inside Octapuss
+Pointer pals          Pointer playground        Light / Dark
                       ┌──────────────────────────────────────┐
-● Ink                 │ Move here to try the actual pointer. │
-○ Tide                │                                      │
-○ Blush               │ Sample text       [Sample button]    │
-                      │                                      │
+● Ink                 │  Large pointer portrait              │
+○ Tide                │  Bring your pointer in               │
+○ Blush               │  Tiny click test          [Boop!]    │
                       └──────────────────────────────────────┘
                       Test background: Light / Dark
 
@@ -33,7 +33,7 @@ Pointer presets       Preview inside Octapuss
 
 This is a content schematic, not a screenshot. The preview should dominate the window; the short preset list needs no full application sidebar. At the minimum size, retain a usable preview and allow settings content to scroll. Do not crop actions or depend on a fixed screenshot layout.
 
-Use an AppKit-backed preview region for the real cursor. Outside that region, Octapuss's controls retain their normal cursor behavior. A larger art sample may supplement the preview, but cannot replace testing at actual size.
+One native AppKit preview owns rendering, cursor rectangles, tracking, and the Boop NSButton. It replaces the transparent cursor overlay so input and cursor ownership share the same region. Outside that region, Octapuss's controls retain their normal cursor behavior. A larger art sample supplements testing at actual size.
 
 For an arrow-only pack, sample text and buttons demonstrate clicks and legibility; they do not promise custom global I-beam or hand shapes.
 
@@ -55,17 +55,19 @@ Use a single semantic token source during implementation. Hex values below speci
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| background | `#F6F1E6` | `#151D22` | Main canvas |
-| surface | `#FFFCF5` | `#202B32` | Preview surround and grouped settings |
-| textPrimary | `#202A31` | `#F5F1E8` | Main labels |
-| textSecondary | `#5B6B72` | `#9CADB6` | Help and metadata |
-| accent | `#16766D` | `#6EC9BB` | Primary action and selection |
-| onAccent | `#FFFFFF` | `#151D22` | Primary action label |
-| brandDetail | `#A44760` | `#ECA1B7` | Small mascot/pack detail |
+| background | `#FEF5E7` | `#1A1627` | Main canvas |
+| surface | `#FFFDF8` | `#251F34` | Status and grouped settings |
+| preview | `#FFF8E9` | `#1A1627` | Pointer playground |
+| textPrimary | `#2D2440` | `#FAF7FF` | Main labels |
+| textSecondary | native semantic | native semantic | Help and metadata |
+| lavender | `#8C6BD8` | `#9D7BE8` | Focus, tint, active control |
+| tide | `#3F9B91` | `#66C3B6` | Ready status and Tide preset |
+| blush | `#DF6C92` | `#EC86A8` | Blush preset and warm detail |
+| sunshine | `#F4B860` | `#F4B860` | Mascot halo and preview depth |
 
 Errors, warnings, selection behavior, disabled content, and focus should use appropriate native semantic treatment. Do not infer error/success from the brand colors. Validate contrast in rendered controls, including selected, hover, and disabled states.
 
-Typography uses the macOS system font through native APIs. Proposed hierarchy: 22 pt semibold title, 15 pt semibold section labels, 13 pt body/control text, 12 pt help. Use native control sizing and adapt to accessibility settings.
+Typography uses the macOS system font through native APIs. The 24 pt bold rounded title carries character; 15–16 pt semibold section and preview labels, 13 pt body/control text, and 11–12 pt help keep the workbench familiar. Use native control sizing and adapt to accessibility settings.
 
 Spacing follows a 4 pt scale: 8 pt related controls, 12 pt control groups, 16 pt panel padding, 24 pt major separation. Keep corners and borders consistent with native components rather than drawing ornamental containers around every setting.
 
@@ -73,33 +75,26 @@ Spacing follows a 4 pt scale: 8 pt related controls, 12 pt control groups, 16 pt
 
 | Runtime state | Message | Main action |
 | --- | --- | --- |
-| Off | Customization off · preview available | Enable with the backend's actual scope |
-| Starting | Starting Octapuss… | Cancel |
-| Active replacement | Octapuss active across supported apps | Pause |
-| Active companion | Pointer companion active | Pause |
-| Permission needed | Permission required | Explain permission / Open System Settings |
-| Paused | Customization paused · preview available | Resume |
-| Known suspension | Using system pointer here | Details / Restore |
-| Error | Customization stopped | Retry / Restore |
-| Recovery required | Restoration incomplete | Retry Restore / recovery instructions |
+| Preview active | App-local preview active | Restore system pointer |
+| Preview paused | System pointer · preview paused | Resume preview |
 
-Never show Active merely because an enabled preference was saved. Only offer a suspension message for a condition the backend can actually detect. Do not invent reliable detection of secure surfaces, cursor roles, or every unsupported application.
+The current app starts with the local preview active. This mode is runtime state, not a saved enable preference. There is no global engine, companion panel, cursor hiding, or permission flow in the executable.
 
-The Enable label must be specific: **Enable across supported apps**, **Enable pointer companion**, or no global action for a preview-only build. The actual scope should remain visible beside status.
+Keep the app-local scope visible beside status; offer no global action.
 
-Preset and size changes update the preview immediately. When active, pre-validate a new asset before swapping it; a failed swap leaves the old valid setting running or safely stops the engine and reports the error.
+Preset and size changes update the preview immediately without resuming a paused preview. Style, size, and Light/Dark background persist across relaunch. Boop increments the visible click count and updates diagnostic text; the count resets on relaunch.
 
-Restore stops across-app effects and preserves selected preferences. The labeled test region continues showing the chosen preview cursor when entered; the system pointer is restored outside it. Reset preferences is a separate Settings action. Quit removes both the global effect and the preview region.
+Restore pauses the custom cursor inside the playground and preserves selected preferences. The system pointer is used there until Resume preview is chosen. Reset preferences is a separate Settings action and preserves the paused state. Quit restores the pointer before exiting.
 
-Show Off, Paused, or “Customization stopped” only after cleanup is confirmed. If restoration is incomplete, keep the recovery state visible and provide backend-specific instructions. Restore works from every state, including Starting, Permission needed, and Suspended; cancelling an in-progress start must also unwind any acquired effects.
+Restore is idempotent and remains reachable from the main window, Settings, app menu, and menu bar.
 
 ## Onboarding and menu bar
 
-First launch opens the usable preview with customization off. Explain the pointer scope in one sentence. Request a permission only after the action requiring it, with a purpose-specific explanation. Returning from System Settings rechecks access before offering Resume.
+First launch opens the usable local preview. Explain the pointer scope in one sentence. No global permission is needed.
 
-The menu bar contains status, Pause/Resume, Restore system pointer, Open Octapuss, Settings, and Quit. Restore and Quit remain reachable even when the engine has failed. Closing the customization window keeps the menu-bar utility running; make that behavior clear once.
+The menu bar contains status, Open Octapuss, preset selection, Restore system pointer / Resume preview, Settings, and Quit. Closing the customization window keeps the menu-bar utility running.
 
-Settings (`⌘,`) contains appearance, permissions and compatibility, and reset preferences. Launch at login is deferred until recovery is dependable. Diagnostics show the OS/backend and errors without collecting browsing or typing activity.
+Settings (`⌘,`) contains scope, shared preview status and Restore/Resume, privacy, and reset preferences. Launch at login remains deferred. Diagnostics report local preview actions without collecting browsing or typing activity.
 
 ## Accessibility and motion
 

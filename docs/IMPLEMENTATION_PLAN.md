@@ -1,16 +1,18 @@
 # Octapuss implementation plan
 
-Execution status · **Phase 0 proof completed on 1 October 2026.** Its global-replacement conclusion is inconclusive and not accepted; see [FEASIBILITY_RESULTS.md](FEASIBILITY_RESULTS.md). Phases 1–5 are not started and require the user's backend/scope choice.
+Execution status · **Phase 0 proof completed and app-local customization selected on 1 October 2026.** See [FEASIBILITY_RESULTS.md](FEASIBILITY_RESULTS.md). The app-local behavioral repair is recorded in [REPAIR_VERIFICATION.md](REPAIR_VERIFICATION.md). Global experiments have been removed from the executable; they remain historical evidence only. Phases below describe the remaining productization plan, not a claim that all exit criteria have passed.
+
+Current implementation: a minimal `Octapuss.xcodeproj` with shared app scheme exists, but Xcode compilation, signing/capabilities, and XCTest remain untested; no XCTest target exists. Command Line Tools builds and isolated executable native regression checks are recorded in the repair verification. The native preview owns rendering, cursor rectangles, tracking, and the working Boop button, replacing the transparent overlay. Restore pauses the local custom cursor until Resume preview; preset changes and preference reset preserve pause. Style, size, and background persist. Relaunch starts the local preview active with a fresh click count. The window defaults to 840 × 560 pt, has a 760 × 500 pt minimum, and scrollable main content. Preserve existing visual tokens.
 
 ## Milestones
 
 | Phase | Work | Exit criterion | Depends on |
 | --- | --- | --- | --- |
-| 0 | Toolchain check and native cursor feasibility proof | Evidence report completed; backend/scope decision remains open | Completed proof |
-| 1 | Xcode app shell, shared state, window, Settings, menu bar | Fresh app launches Off; Open/Settings/Quit work; closing window keeps utility accessible | Phase 0 route selected |
+| 0 | Toolchain check and native cursor feasibility proof | Evidence report completed; app-local scope selected | Completed proof |
+| 1 | Xcode app shell, shared state, window, Settings, menu bar | Fresh app launches local preview only; Open/Settings/Quit work; closing window keeps utility accessible | Phase 0 route selected |
 | 2 | Bundled pointer metadata, one arrow family, preview, size controls | All presets/sizes preview accurately; invalid assets fail safely | Phase 1 |
 | 3 | Selected cursor backend, session lifecycle, Pause/Restore | Real scope works across its declared contexts; all runtime states truthful | Phase 0 + Phase 2 |
-| 4 | Preference persistence, permission guidance, diagnostics | Denial/revocation/failure recover; relaunch begins Off or RecoveryRequired according to unresolved effects, with preferences retained | Phase 3 |
+| 4 | Preference persistence, scope guidance, diagnostics | Relaunch begins with local preview active and preferences retained; no global permissions requested | Phase 3 |
 | 5 | Compatibility, performance, accessibility, and local beta | Required checks pass; untested contexts disclosed; reproducible build available | Phase 4 |
 
 Each phase should leave a runnable, reviewable result. Do not build all phases before testing the engine, and do not make a web demo the product implementation.
@@ -25,10 +27,10 @@ If public global replacement fails, finish the evidence report and present the a
 
 ## Phase 1: native shell
 
-- Create one macOS app target and a focused test target.
+- Retain the existing macOS app target and shared scheme; add a focused test target when full Xcode is available.
 - Implement a single shared AppStore and the explicit runtime state vocabulary.
 - Add Customize, Settings, and menu-bar commands with native controls.
-- Make the initial state Off and Restore/Quit available in every runtime state.
+- Keep launch app-local only, with Restore/Quit available and explicit Resume after Restore.
 - Keep storage and cursor engine behind small boundaries.
 
 Accept when the app runs as a utility, window/menu state stays consistent, and no global permission is requested simply on launch.
@@ -56,7 +58,7 @@ Accept when the user's chosen scope works in its declared contexts and recovery 
 
 ## Phase 4: polish the utility behavior
 
-- Persist typed settings without persisting automatic enable-on-launch behavior.
+- Persist style, size, and preview background without persisting runtime pause state or click count. Launch activates only the app-local preview.
 - Explain only required permissions at the moment of need and recheck on return.
 - Add concise local compatibility/error details and safe retry.
 - Complete keyboard navigation, VoiceOver descriptions, focus, and appearance handling.
@@ -85,6 +87,6 @@ Estimate later phases after Chunk A. Private API maintenance, missing Xcode, una
 
 ## Completion definition
 
-The first release is complete only when the chosen scope, user controls, hotspot accuracy, runtime honesty, recovery, declared compatibility, and local build instructions all pass. A design mockup, app-local preview, or unverified global overlay is a milestone result, not a completed global-pointer app.
+The first release is complete only when the chosen app-local scope, user controls, hotspot accuracy, runtime honesty, recovery, declared compatibility, and local build instructions all pass. The repair verification records the current evidence and untested cases; it does not establish global cursor replacement.
 
 Later roadmap: animation only after static correctness; pack import/editor after validation boundaries; per-app rules after a trustworthy application-context mechanism; launch at login after restart/recovery; distribution and updates after a dependable beta.

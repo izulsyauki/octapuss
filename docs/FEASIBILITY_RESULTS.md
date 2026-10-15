@@ -1,19 +1,21 @@
 # Phase 0 feasibility results
 
+**Historical report, 1 October 2026.** The app-local repair on 15 October removed companion and cursor-hiding experiments from the executable. Current behavior and verification live in [REPAIR_VERIFICATION.md](REPAIR_VERIFICATION.md); statements below describe the earlier proof.
+
 Run date: **1 October 2026**. Result scope: local native proof on the available Mac. This report separates code/build evidence, UI observation, and cases that still require human-visible pointer testing.
 
 ## Outcome
 
 **Global replacement gate: inconclusive and not accepted.** App-local customization is implemented. A public pointer companion is implemented and truthfully leaves the native pointer visible. The documented foreground hide call succeeds and restores in this app, but cross-app replacement, semantic cursor roles, hotspot accuracy, forced termination, and multi-display behavior have not been established.
 
-The product must not proceed as “system-wide cursor replacement” until the user chooses a route and that route passes the missing manual checks.
+The user selected **app-local customization** on 1 October 2026. The product can proceed on that route without claiming system-wide replacement. Across-app experiments remain lab-only and still require the missing manual checks before any broader claim.
 
 ## Built proof
 
 - Source: `Phase0/OctapussProof.swift`
 - Bundle metadata: `Phase0/Info.plist`
 - Reproducible builder: `scripts/build-phase0.sh`
-- Generated app: `/tmp/octapuss-phase0/Octapuss Cursor Lab.app`
+- Generated app: `/tmp/octapuss-phase0/Octapuss.app`
 
 Implemented behavior:
 
@@ -88,12 +90,12 @@ Context7 resolved Apple's current SwiftUI and AppKit documentation. The implemen
 
 These APIs support the proof's preview and companion. They do not establish public system-wide replacement. Apple's documented hide API normally requires the foreground application, as detailed in [FEASIBILITY.md](FEASIBILITY.md).
 
-## Decision required
+## Decision recorded
 
-Choose one route before Phases 1–5:
+The selected route is **app-local customization**. The other researched routes remain documented alternatives:
 
 1. **Actual global cursor themes:** research a separate private-API/direct-distribution backend with durable baseline recovery. This is the closest to the original product idea and carries the highest maintenance and distribution risk.
 2. **Pointer companion:** build the polished app around an additive cat-octopus marker while preserving every native cursor role. This uses the implemented public approach but is a different product promise.
-3. **App-local customization:** ship a cursor preview/creation utility without across-app behavior. This has the lowest platform risk and does not satisfy a system-wide customization goal.
+3. **App-local customization — selected:** ship a cursor preview/customization utility without promised across-app behavior. This has the lowest platform risk and matches the confirmed first-release scope.
 
 Whichever route is selected must still complete the manual matrix, Force Quit recovery, performance measurement, and available accessibility checks in [TEST_PLAN.md](TEST_PLAN.md).

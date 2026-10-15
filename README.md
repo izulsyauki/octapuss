@@ -1,12 +1,12 @@
 # Octapuss
 
-A proposed macOS pointer personalization app with an octopus-and-cat identity.
+A native macOS pointer playground with a joyful octopus-and-cat identity.
 
-**Status: Phase 0 cursor proof implemented · 1 October 2026.** The repository now contains a native SwiftUI/AppKit feasibility app. The full product and Xcode project have not started because system-wide replacement remains an explicit scope gate.
+**Status: app-local repair · 15 October 2026.** The repository contains a native SwiftUI/AppKit app, a minimal Xcode app project, and focused executable regression checks.
 
 The first idea is deliberately small: choose a static pointer style, try it at actual size, and enable or pause it from a native Mac app. The brand combines a cat-eared octopus mascot with clear, practical pointer artwork.
 
-The working assumption is customization **across other macOS apps**. That scope has not yet been confirmed by the user. Genuine system-wide replacement is the first technical gate: Apple's public app cursor APIs and a pointer-following overlay do not by themselves establish a reliable global replacement mechanism. See [feasibility](docs/FEASIBILITY.md).
+The supported product direction is **app-local customization inside Octapuss**. Cursor-hiding and across-app companion experiments have been removed from the executable. See [historical feasibility](docs/FEASIBILITY_RESULTS.md).
 
 ## Read the plan
 
@@ -22,7 +22,7 @@ The working assumption is customization **across other macOS apps**. That scope 
 
 ## Phase 0 proof
 
-The proof includes the three planned cursor colors, Small/Medium/Large app-local preview, light/dark test surfaces, a menu-bar utility, a click-through pointer companion, Restore, and a balanced foreground cursor-hide check. Its arrow-tip hotspot scales with the selected size, the preview cursor layer passes clicks through to its sample controls, and the standard Command-Q path runs owned-effect cleanup. The build produces an arm64 app with a macOS 14.0 minimum deployment target; human-visible hotspot accuracy, cross-app behavior, other displays, performance, VoiceOver, and Force Quit recovery remain **untested**. The companion deliberately leaves the native pointer visible and is not labelled as replacement.
+The app includes three cursor colors, three sizes, saved light/dark preview backgrounds, menu-bar access, and working Restore/Resume controls. A native preview view owns its cursor rectangle and real Boop button. Each click updates visible feedback. Restore disables the custom cursor inside the playground; choosing a preset while paused preserves that state. No global polling timer, overlay panel, or cursor-hide call runs.
 
 Build with the installed Command Line Tools:
 
@@ -30,7 +30,11 @@ Build with the installed Command Line Tools:
 rtk proxy zsh scripts/build-phase0.sh
 ```
 
-The script prints the generated ad-hoc signed app path, currently `/tmp/octapuss-phase0/Octapuss Cursor Lab.app`. It uses the locally installed macOS 15.4 SDK to avoid a patch mismatch in the default 26.5 Command Line Tools SDK and cleans its temporary module cache on exit. Full Xcode is not installed in `/Applications`, so there is no `.xcodeproj` or `xcodebuild test` result yet.
+The script prints `/tmp/octapuss-phase0/Octapuss.app`. It uses the locally installed macOS 15.4 SDK as a workaround for the installed Command Line Tools mismatch, with an `OCTAPUSS_SDK_PATH` override. It cleans its temporary module cache on exit.
+
+Run focused regression checks with `rtk proxy zsh scripts/build-phase0.sh --check`. These exercise the real native view and isolated preferences; they are executable checks, not an XCTest suite.
+
+`Octapuss.xcodeproj` contains the shared Octapuss app scheme. With full Xcode selected, use `xcodebuild -project Octapuss.xcodeproj -scheme Octapuss build CODE_SIGNING_ALLOWED=NO`. Full Xcode is unavailable on this host, so that route and XCTest execution remain **untested**. See [repair verification](docs/REPAIR_VERIFICATION.md) for the exact evidence and limits.
 
 See [the measured Phase 0 result](docs/FEASIBILITY_RESULTS.md) before choosing the next backend.
 
@@ -42,6 +46,6 @@ See [the measured Phase 0 result](docs/FEASIBILITY_RESULTS.md) before choosing t
 4. Add the proven engine, recovery, and settings.
 5. Test the declared support matrix and prepare a local beta.
 
-**Next decision:** choose actual global-theme research, the honest pointer companion, or an app-local customization scope. A polished preview does not count as proof that custom pointers work across macOS.
+**Selected scope:** app-local customization. Across-app behavior requires a future explicit scope decision.
 
 No system permissions, login items, helpers, or persistent system cursor changes are installed by the proof.

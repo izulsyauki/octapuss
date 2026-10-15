@@ -1,5 +1,4 @@
 import AppKit
-import CoreGraphics
 import SwiftUI
 
 // Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4
@@ -7,20 +6,30 @@ import SwiftUI
 // Structural fingerprint: pointer workbench with one dominant live preview.
 
 enum AppPalette {
-    static let ink = NSColor(srgbRed: 0.125, green: 0.165, blue: 0.192, alpha: 1)
-    static let tide = NSColor(srgbRed: 0.086, green: 0.463, blue: 0.427, alpha: 1)
-    static let blush = NSColor(srgbRed: 0.643, green: 0.278, blue: 0.376, alpha: 1)
+    static let ink = NSColor(srgbRed: 0.176, green: 0.141, blue: 0.251, alpha: 1)
+    static let tide = NSColor(srgbRed: 0.247, green: 0.608, blue: 0.569, alpha: 1)
+    static let blush = NSColor(srgbRed: 0.875, green: 0.424, blue: 0.573, alpha: 1)
+    static let lavender = NSColor(srgbRed: 0.549, green: 0.420, blue: 0.847, alpha: 1)
+    static let sunshine = NSColor(srgbRed: 0.957, green: 0.722, blue: 0.376, alpha: 1)
     static let pointerOutline = NSColor.white.withAlphaComponent(0.96)
     static let pointerDetail = NSColor.white.withAlphaComponent(0.8)
-    static let previewLight = NSColor(srgbRed: 1, green: 0.988, blue: 0.961, alpha: 1)
-    static let previewDark = NSColor(srgbRed: 0.082, green: 0.114, blue: 0.133, alpha: 1)
-    static let backgroundLight = NSColor(srgbRed: 0.965, green: 0.945, blue: 0.902, alpha: 1)
+    static let previewLight = NSColor(srgbRed: 1, green: 0.973, blue: 0.914, alpha: 1)
+    static let previewDark = NSColor(srgbRed: 0.102, green: 0.086, blue: 0.153, alpha: 1)
+    static let surfaceLight = NSColor(srgbRed: 1, green: 0.992, blue: 0.973, alpha: 1)
+    static let surfaceDark = NSColor(srgbRed: 0.145, green: 0.125, blue: 0.204, alpha: 1)
+    static let backgroundLight = NSColor(srgbRed: 0.996, green: 0.961, blue: 0.906, alpha: 1)
     static let backgroundDark = previewDark
 
     static let background = NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? backgroundDark
             : backgroundLight
+    }
+
+    static let surface = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? surfaceDark
+            : surfaceLight
     }
 }
 
@@ -35,9 +44,9 @@ enum PointerPack: String, CaseIterable, Identifiable {
 
     var detail: String {
         switch self {
-        case .ink: "Crisp and neutral"
-        case .tide: "Deep teal"
-        case .blush: "Warm rose"
+        case .ink: "Cozy night purple"
+        case .tide: "Fresh lagoon mint"
+        case .blush: "Berry-pink sparkle"
         }
     }
 
@@ -67,120 +76,63 @@ enum PointerSize: String, CaseIterable, Identifiable {
     }
 }
 
-enum ProofStatus: Equatable {
-    case off
-    case companion
-    case hideTest
-    case recoveryRequired(String)
-
-    var title: String {
-        switch self {
-        case .off: "Customization off · preview available"
-        case .companion: "Pointer companion active"
-        case .hideTest: "Documented hide test running"
-        case .recoveryRequired: "Restoration incomplete"
-        }
-    }
-}
-
 @MainActor
 final class ProofStore: ObservableObject {
+    private let defaults: UserDefaults
+
     @Published var pack: PointerPack {
-        didSet { UserDefaults.standard.set(pack.rawValue, forKey: "selectedPack") }
+        didSet { defaults.set(pack.rawValue, forKey: "selectedPack") }
     }
 
     @Published var pointerSize: PointerSize {
-        didSet { UserDefaults.standard.set(pointerSize.rawValue, forKey: "pointerSize") }
+        didSet { defaults.set(pointerSize.rawValue, forKey: "pointerSize") }
     }
 
-    @Published var darkPreview = false
-    @Published private(set) var status: ProofStatus = .off
-    @Published private(set) var diagnostic = "Ready. No global permission requested."
-
-    private let companion = PointerCompanionController()
-    private var hideOwned = false
-    private var hideRestoreWorkItem: DispatchWorkItem?
-
-    init() {
-        let savedPack = UserDefaults.standard.string(forKey: "selectedPack")
-        let savedSize = UserDefaults.standard.string(forKey: "pointerSize")
-        pack = PointerPack(rawValue: savedPack ?? "") ?? .ink
-        pointerSize = PointerSize(rawValue: savedSize ?? "") ?? .medium
+    @Published var darkPreview: Bool {
+        didSet { defaults.set(darkPreview, forKey: "darkPreview") }
     }
 
-    var cursor: NSCursor {
-        PointerArtwork.cursor(pack: pack, size: pointerSize.points)
+    @Published private(set) var previewEnabled = true
+    @Published private(set) var clickCount = 0
+    @Published private(set) var diagnostic = "Custom cursor inside the playground only."
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        pack = PointerPack(rawValue: defaults.string(forKey: "selectedPack") ?? "") ?? .ink
+        pointerSize = PointerSize(rawValue: defaults.string(forKey: "pointerSize") ?? "") ?? .medium
+        darkPreview = defaults.bool(forKey: "darkPreview")
     }
 
-    func toggleCompanion() {
-        if status == .companion {
-            restore()
-            return
-        }
-
-        guard !hideOwned else {
-            diagnostic = "Restore the hide test before starting the companion."
-            return
-        }
-
-        companion.start(pack: pack)
-        status = .companion
-        diagnostic = "Companion only: the native pointer intentionally remains visible."
+    var statusTitle: String {
+        previewEnabled ? "App-local preview active" : "System pointer · preview paused"
     }
 
-    func updateCompanionIfNeeded() {
-        guard status == .companion else { return }
-        companion.update(pack: pack)
-    }
-
-    func runForegroundHideCheck() {
-        guard status == .off else {
-            diagnostic = "Restore current effects before running the hide check."
-            return
-        }
-
-        let result = CGDisplayHideCursor(CGMainDisplayID())
-        guard result == .success else {
-            status = .recoveryRequired("CGDisplayHideCursor returned \(result.rawValue)")
-            diagnostic = "The cursor was not hidden. No hide ownership was recorded."
-            return
-        }
-
-        hideOwned = true
-        status = .hideTest
-        diagnostic = "Cursor hidden for 2 seconds while Octapuss is foreground. It will be shown exactly once."
-
-        let item = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated {
-                self?.restore()
-            }
-        }
-        hideRestoreWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: item)
+    func recordClick() {
+        clickCount += 1
+        diagnostic = "Boop registered. \(clickCount) successful click\(clickCount == 1 ? "" : "s")."
     }
 
     func restore() {
-        hideRestoreWorkItem?.cancel()
-        hideRestoreWorkItem = nil
-        companion.stop()
+        previewEnabled = false
+        NSCursor.arrow.set()
+        diagnostic = "System pointer restored, including inside the playground."
+    }
 
-        if hideOwned {
-            let result = CGDisplayShowCursor(CGMainDisplayID())
-            if result != .success {
-                status = .recoveryRequired("CGDisplayShowCursor returned \(result.rawValue)")
-                diagnostic = "Restoration incomplete. Try Restore again before quitting."
-                return
-            }
-            hideOwned = false
-        }
+    func resumePreview() {
+        previewEnabled = true
+        diagnostic = "Custom cursor inside the playground only."
+    }
 
-        status = .off
-        diagnostic = "Across-app effects stopped. The labeled preview remains available."
+    func resetPreferences() {
+        pack = .ink
+        pointerSize = .medium
+        darkPreview = false
+        clickCount = 0
+        diagnostic = "Preferences reset. Your preview mode is unchanged."
     }
 
     func prepareToQuit() -> Bool {
         restore()
-        if case .recoveryRequired = status { return false }
         return true
     }
 }
@@ -267,95 +219,184 @@ enum PointerArtwork {
     }
 }
 
+/// Owns both the cursor rectangle and native click target; no transparent hit-test overlay.
 @MainActor
-final class PointerCompanionController {
-    private var panel: NSPanel?
-    private var imageView: NSImageView?
-    private var timer: Timer?
+final class CursorPreviewNSView: NSView {
+    private(set) var pack: PointerPack = .ink
+    private(set) var pointerSize: PointerSize = .medium
+    private(set) var customEnabled = true
+    private(set) var darkPreview = false
+    private(set) var clickCount = 0
+    private var previewCursor: NSCursor = PointerArtwork.cursor(pack: .ink, size: 32)
+    private var portrait = PointerArtwork.pointerImage(pack: .ink, size: 72)
+    private var cursorTrackingArea: NSTrackingArea?
+    var onClick: (() -> Void)?
+    let sampleButton = NSButton(title: "Boop!", target: nil, action: nil)
 
-    func start(pack: PointerPack) {
-        stop()
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 34, height: 34),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.ignoresMouseEvents = true
-        panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        panel.hidesOnDeactivate = false
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        sampleButton.bezelStyle = .rounded
+        sampleButton.target = self
+        sampleButton.action = #selector(boop)
+        sampleButton.setAccessibilityLabel("Boop, test pointer click")
+        sampleButton.setAccessibilityHelp("Registers a click and updates the click count.")
+        addSubview(sampleButton)
+        setAccessibilityIdentifier("pointerPlayground")
+    }
 
-        let imageView = NSImageView(frame: panel.contentView?.bounds ?? .zero)
-        imageView.imageScaling = .scaleProportionallyUpOrDown
-        imageView.image = PointerArtwork.companionImage(pack: pack)
-        panel.contentView = imageView
-        panel.orderFrontRegardless()
+    required init?(coder: NSCoder) { nil }
+    override var isFlipped: Bool { true }
 
-        self.panel = panel
-        self.imageView = imageView
-        moveToPointer()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.moveToPointer()
+    func configure(pack: PointerPack, size: PointerSize, dark: Bool, enabled: Bool, clicks: Int) {
+        let cursorChanged = self.pack != pack || pointerSize != size || customEnabled != enabled
+        if self.pack != pack {
+            portrait = PointerArtwork.pointerImage(pack: pack, size: 72)
+        }
+        self.pack = pack
+        pointerSize = size
+        darkPreview = dark
+        customEnabled = enabled
+        clickCount = clicks
+        if cursorChanged {
+            previewCursor = enabled ? PointerArtwork.cursor(pack: pack, size: size.points) : .arrow
+            window?.invalidateCursorRects(for: self)
+            if let window, window.isKeyWindow,
+               visibleRect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
+                previewCursor.set()
             }
         }
+        appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        needsDisplay = true
+        needsLayout = true
     }
 
-    func update(pack: PointerPack) {
-        imageView?.image = PointerArtwork.companionImage(pack: pack)
-    }
+    @objc private func boop() { onClick?() }
 
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-        panel?.orderOut(nil)
-        panel = nil
-        imageView = nil
+    override func layout() {
+        super.layout()
+        sampleButton.frame = NSRect(x: 168, y: max(130, bounds.height - 58), width: 84, height: 30)
     }
-
-    private func moveToPointer() {
-        guard let panel else { return }
-        let point = NSEvent.mouseLocation
-        panel.setFrameOrigin(NSPoint(x: point.x + 13, y: point.y - 42))
-    }
-}
-
-final class CursorPreviewNSView: NSView {
-    var cursor: NSCursor = .arrow {
-        didSet { window?.invalidateCursorRects(for: self) }
-    }
-
-    override var acceptsFirstResponder: Bool { true }
 
     override func resetCursorRects() {
-        super.resetCursorRects()
-        addCursorRect(bounds, cursor: cursor)
+        addCursorRect(visibleRect, cursor: previewCursor)
     }
 
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        nil
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let cursorTrackingArea { removeTrackingArea(cursorTrackingArea) }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        cursorTrackingArea = area
+    }
+
+    override func cursorUpdate(with event: NSEvent) { previewCursor.set() }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let background = darkPreview ? AppPalette.previewDark : AppPalette.previewLight
+        let foreground = darkPreview ? NSColor.white : AppPalette.ink
+        let secondary = darkPreview
+            ? NSColor(srgbRed: 0.78, green: 0.74, blue: 0.84, alpha: 1)
+            : NSColor(srgbRed: 0.36, green: 0.31, blue: 0.43, alpha: 1)
+        let outline = darkPreview ? NSColor.white.withAlphaComponent(0.18) : AppPalette.ink.withAlphaComponent(0.16)
+        let surface = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 14, yRadius: 14)
+        background.setFill()
+        surface.fill()
+        outline.setStroke()
+        surface.lineWidth = 1
+        surface.stroke()
+
+        let halo = NSRect(x: 22, y: (bounds.height - 112) / 2, width: 112, height: 112)
+        AppPalette.sunshine.withAlphaComponent(darkPreview ? 0.18 : 0.30).setFill()
+        NSBezierPath(ovalIn: halo).fill()
+        portrait.draw(
+            in: NSRect(x: 40, y: (bounds.height - 76) / 2, width: 76, height: 76),
+            from: .zero, operation: .sourceOver, fraction: customEnabled ? 1 : 0.4,
+            respectFlipped: true, hints: nil
+        )
+
+        let width = max(140, bounds.width - 190)
+        drawText(customEnabled ? "Bring your pointer in" : "System pointer restored",
+                 rect: NSRect(x: 168, y: 22, width: width, height: 26),
+                 font: .systemFont(ofSize: 16, weight: .semibold), color: foreground)
+        drawText(customEnabled
+                 ? "Move here to try the real cursor. Click Boop to check its tip."
+                 : "Choose Resume preview to use your custom cursor again.",
+                 rect: NSRect(x: 168, y: 56, width: width, height: 66),
+                 font: .systemFont(ofSize: 13), color: secondary)
+        drawText(clickCount == 0 ? "Click test ready" : "\(clickCount) click\(clickCount == 1 ? "" : "s") registered",
+                 rect: NSRect(x: 262, y: max(136, bounds.height - 52), width: max(100, bounds.width - 280), height: 38),
+                 font: .systemFont(ofSize: 12, weight: .medium), color: secondary)
+    }
+
+    private func drawText(_ text: String, rect: NSRect, font: NSFont, color: NSColor) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byWordWrapping
+        (text as NSString).draw(in: rect, withAttributes: [
+            .font: font, .foregroundColor: color, .paragraphStyle: paragraph
+        ])
     }
 }
 
 struct CursorPreviewBridge: NSViewRepresentable {
-    let cursor: NSCursor
+    @ObservedObject var store: ProofStore
 
     func makeNSView(context: Context) -> CursorPreviewNSView {
         let view = CursorPreviewNSView()
-        view.cursor = cursor
-        view.setAccessibilityElement(true)
-        view.setAccessibilityRole(.group)
-        view.setAccessibilityLabel("Pointer preview inside Octapuss")
-        view.setAccessibilityHelp("Move the pointer here to try the selected cursor at its actual size.")
+        view.setAccessibilityLabel("Pointer playground inside Octapuss")
+        view.setAccessibilityHelp("Move here to try the selected cursor. Boop tests clicking.")
         return view
     }
 
-    func updateNSView(_ nsView: CursorPreviewNSView, context: Context) {
-        nsView.cursor = cursor
+    func updateNSView(_ view: CursorPreviewNSView, context: Context) {
+        view.onClick = { store.recordClick() }
+        view.configure(pack: store.pack, size: store.pointerSize, dark: store.darkPreview,
+                       enabled: store.previewEnabled, clicks: store.clickCount)
+    }
+
+    static func dismantleNSView(_ view: CursorPreviewNSView, coordinator: ()) {
+        view.onClick = nil
+    }
+}
+
+struct OctapussMascot: View {
+    var compact = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color(nsColor: AppPalette.sunshine).opacity(0.24))
+            Image(nsImage: PointerArtwork.companionImage(pack: .blush))
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .padding(compact ? 5 : 8)
+        }
+        .frame(width: compact ? 34 : 58, height: compact ? 34 : 58)
+        .accessibilityHidden(true)
+    }
+}
+
+struct ScopeBadge: View {
+    let enabled: Bool
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(Color(nsColor: enabled ? AppPalette.tide : AppPalette.sunshine))
+                .frame(width: 8, height: 8)
+            Text(enabled ? "App-local preview active" : "Preview paused")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 7)
+        .background(Color(nsColor: AppPalette.surface), in: Capsule())
+        .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -363,30 +404,8 @@ struct CursorPreview: View {
     @ObservedObject var store: ProofStore
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: store.darkPreview ? AppPalette.previewDark : AppPalette.previewLight))
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(store.darkPreview ? Color.white.opacity(0.12) : Color.black.opacity(0.1))
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Move here to try the actual pointer")
-                    .font(.system(size: 15, weight: .semibold))
-                Text("Click targets stay ordinary so the visible tip can be checked precisely.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                HStack(spacing: 12) {
-                    Text("Sample text")
-                        .textSelection(.enabled)
-                    Button("Sample button") {}
-                }
-            }
-            .foregroundStyle(Color(nsColor: store.darkPreview ? AppPalette.pointerOutline : AppPalette.ink))
-            .padding(22)
-            CursorPreviewBridge(cursor: store.cursor)
-                .accessibilityHidden(false)
-        }
-        .frame(minHeight: 205)
+        CursorPreviewBridge(store: store)
+            .frame(minHeight: 225)
     }
 }
 
@@ -411,51 +430,61 @@ struct PackRow: View {
         .padding(.vertical, 7)
         .padding(.horizontal, 9)
         .contentShape(Rectangle())
-        .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear, in: RoundedRectangle(cornerRadius: 9))
+        .background(
+            isSelected ? Color(nsColor: pack.color).opacity(0.14) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(isSelected ? Color(nsColor: pack.color).opacity(0.28) : Color.clear)
+        }
     }
 }
 
 struct ContentView: View {
     @EnvironmentObject private var store: ProofStore
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .firstTextBaseline) {
+        ScrollView {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                OctapussMascot()
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("Octapuss Cursor Lab")
-                        .font(.system(size: 22, weight: .semibold))
-                    Text(store.status.title)
-                        .font(.system(size: 12))
+                    Text("Octapuss")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                    Text("Dress up your pointer. Keep every click precise.")
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button(store.status == .companion ? "Pause companion" : "Enable pointer companion") {
-                    store.toggleCompanion()
-                }
-                .keyboardShortcut(.space, modifiers: [.command])
+                ScopeBadge(enabled: store.previewEnabled)
             }
 
             HStack(alignment: .top, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Pointer presets")
+                    Text("Pointer pals")
                         .font(.system(size: 15, weight: .semibold))
+                    Text("Pick a mood for your tiny guide.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
                     ForEach(PointerPack.allCases) { pack in
                         Button {
-                                store.pack = pack
-                                store.updateCompanionIfNeeded()
+                            store.pack = pack
+
                         } label: {
                             PackRow(pack: pack, isSelected: store.pack == pack)
                         }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(store.pack == pack ? .isSelected : [])
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(store.pack == pack ? .isSelected : [])
                     }
                     Spacer(minLength: 0)
                 }
-                .frame(width: 172)
+                .frame(width: 184)
 
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text("Preview inside Octapuss")
+                        Text("Pointer playground")
                             .font(.system(size: 15, weight: .semibold))
                         Spacer()
                         Picker("", selection: $store.darkPreview) {
@@ -490,19 +519,27 @@ struct ContentView: View {
             HStack(alignment: .center, spacing: 12) {
                 Button("Restore system pointer") { store.restore() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
-                Button("Run 2-second foreground hide check") { store.runForegroundHideCheck() }
-                    .disabled(store.status != .off)
+                if !store.previewEnabled {
+                    Button("Resume preview") { store.resumePreview() }
+                }
+                Button("Settings…") { openSettings() }
                 Spacer()
-                Text(store.diagnostic)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-                    .frame(maxWidth: 300, alignment: .trailing)
+                HStack(spacing: 7) {
+                    Image(systemName: "heart.fill")
+                        .foregroundStyle(Color(nsColor: AppPalette.blush))
+                    Text(store.diagnostic)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
+                .frame(maxWidth: 330, alignment: .trailing)
             }
         }
         .padding(24)
-        .frame(minWidth: 680, minHeight: 440)
+        .frame(minWidth: 760, minHeight: 500)
         .background(Color(nsColor: AppPalette.background))
+        .tint(Color(nsColor: AppPalette.lavender))
+        }
     }
 }
 
@@ -511,22 +548,29 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Feasibility scope") {
-                Text("App-local preview: implemented")
-                Text("Pointer companion: implemented with the native pointer visible")
-                Text("System-wide replacement: not established by public APIs")
+            Section("Octapuss scope") {
+                Label("App-local pointer customization", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(Color(nsColor: AppPalette.tide))
+                Text("The pointer changes only inside the labeled playground. No global permission is needed.")
+                    .foregroundStyle(.secondary)
+            }
+            Section("Preview") {
+                Text(store.statusTitle)
+                Button(store.previewEnabled ? "Restore system pointer" : "Resume preview") {
+                    if store.previewEnabled { store.restore() } else { store.resumePreview() }
+                }
             }
             Section("Privacy") {
-                Text("The proof stores only the selected pack and size. It records no pointer history, typing, screenshots, or app activity.")
+                Text("Octapuss stores your pointer style, size, and preview background on this Mac. It records no pointer history, typing, screenshots, or app activity.")
             }
             Button("Reset preferences") {
-                store.pack = .ink
-                store.pointerSize = .medium
+                store.resetPreferences()
             }
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 520, height: 320)
+        .frame(width: 540, height: 430)
+        .tint(Color(nsColor: AppPalette.lavender))
     }
 }
 
@@ -547,11 +591,11 @@ final class ProofAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         DispatchQueue.main.async {
-            guard let window = NSApplication.shared.windows.first(where: { $0.title == "Octapuss Cursor Lab" }) else {
+            guard let window = NSApplication.shared.windows.first(where: { $0.title == "Octapuss" }) else {
                 return
             }
-            window.minSize = NSSize(width: 680, height: 440)
-            window.setContentSize(NSSize(width: 780, height: 520))
+            window.minSize = NSSize(width: 760, height: 500)
+            window.setContentSize(NSSize(width: 840, height: 560))
             window.center()
             window.makeKeyAndOrderFront(nil)
         }
@@ -563,6 +607,7 @@ final class ProofAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+#if !OCTAPUSS_CHECKS
 @main
 struct OctapussProofApp: App {
     @NSApplicationDelegateAdaptor(ProofAppDelegate.self) private var appDelegate
@@ -571,26 +616,39 @@ struct OctapussProofApp: App {
     @Environment(\.openSettings) private var openSettings
 
     var body: some Scene {
-        Window("Octapuss Cursor Lab", id: "main") {
+        Window("Octapuss", id: "main") {
             ContentView()
                 .environmentObject(store)
                 .onAppear {
                     appDelegate.store = store
                 }
         }
-        .defaultSize(width: 780, height: 520)
+        .defaultSize(width: 840, height: 560)
         .commands {
             ProofCommands(store: store)
         }
 
         MenuBarExtra("Octapuss", systemImage: "cursorarrow.rays") {
-            Text(store.status.title)
+            Text(store.statusTitle)
             Divider()
             Button("Open Octapuss") { openWindow(id: "main") }
-            Button(store.status == .companion ? "Pause companion" : "Enable pointer companion") {
-                store.toggleCompanion()
+            Menu("Pointer pal") {
+                ForEach(PointerPack.allCases) { pack in
+                    Button {
+                        store.pack = pack
+
+                    } label: {
+                        if store.pack == pack {
+                            Label(pack.title, systemImage: "checkmark")
+                        } else {
+                            Text(pack.title)
+                        }
+                    }
+                }
             }
-            Button("Restore system pointer") { store.restore() }
+            Button(store.previewEnabled ? "Restore system pointer" : "Resume preview") {
+                if store.previewEnabled { store.restore() } else { store.resumePreview() }
+            }
             Divider()
             Button("Settings…") { openSettings() }
                 .keyboardShortcut(",", modifiers: .command)
@@ -607,3 +665,5 @@ struct OctapussProofApp: App {
         }
     }
 }
+
+#endif

@@ -2,20 +2,19 @@
 
 ## Project Structure & Module Organization
 
-Octapuss is currently a planning-only macOS project; no application target exists yet. Start with `README.md`, then use `PRODUCT.md` and `DESIGN.md` for product and interface decisions. Technical plans live in `docs/`: `ARCHITECTURE.md` defines boundaries, `FEASIBILITY.md` records platform constraints, `IMPLEMENTATION_PLAN.md` orders the work, and `TEST_PLAN.md` defines verification.
+Octapuss is an app-local macOS pointer customization app. Current source is `Phase0/OctapussProof.swift`, with a minimal app target in `Octapuss.xcodeproj` and focused native checks in `OctapussTests/RegressionChecks.swift`. Start with `README.md`, `PRODUCT.md`, and `DESIGN.md`; current verification is in `docs/REPAIR_VERIFICATION.md`.
 
 When implementation begins, follow the proposed layout: `Octapuss/App`, `Features`, `Cursor`, `Platform`, `Models`, `Persistence`, and `Resources`, with focused tests in `OctapussTests`. Keep the app-local preview independent from any across-app cursor backend.
 
 ## Build, Test, and Development Commands
 
-There is no Xcode project or runnable command yet. Do not report builds or tests as passing until `Octapuss.xcodeproj` exists. After project creation, document reproducible commands here, expected to resemble:
+The shared Octapuss scheme is available. With full Xcode selected:
 
 ```sh
 xcodebuild -project Octapuss.xcodeproj -scheme Octapuss build
-xcodebuild -project Octapuss.xcodeproj -scheme Octapuss test
 ```
 
-Phase 0 is the next milestone: prove the cursor approach and record evidence in `FEASIBILITY_RESULTS.md` before building the full shell.
+With Command Line Tools, run `rtk proxy zsh scripts/build-phase0.sh`; add `--check` for executable native regression checks. No XCTest target exists yet. Do not claim Xcode/XCTest validation from the Command Line Tools path. The historical Phase 0 evidence is in `docs/FEASIBILITY_RESULTS.md`; the chosen product scope is app-local and global cursor experiments are excluded.
 
 ## Coding Style & Naming Conventions
 
@@ -27,7 +26,7 @@ Add XCTest coverage for geometry, manifest validation, preferences, state transi
 
 ## Commit & Pull Request Guidelines
 
-No Git history is available in this checkout. Use short, imperative commit subjects, optionally scoped (for example, `Cursor: reject invalid hotspots`). Keep commits reviewable and limited to one milestone concern. Pull requests should explain scope, link the relevant plan or issue, list test evidence and untested cases, include UI captures for visual changes, and call out permission, compatibility, or recovery risks.
+Use short, imperative commit subjects, optionally scoped (for example, `Cursor: reject invalid hotspots`). Keep commits reviewable and limited to one milestone concern. Pull requests should explain scope, link the relevant plan or issue, list test evidence and untested cases, include UI captures for visual changes, and call out compatibility or recovery risks.
 
 ## Security & Recovery
 

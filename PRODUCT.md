@@ -1,68 +1,70 @@
-# Octapuss product brief
+# Product
 
-Product brief · Phase 0 proof implemented on 1 October 2026.
+<!-- impeccable:product-schema 1 -->
 
-## Product intent
+## Platform
 
-Give Mac users a simple way to personalize their mouse pointer with tasteful octopus-and-cat styles while retaining a clear click location and an immediate way to return to the system pointer.
+macOS
 
-Primary user: an individual Mac owner who enjoys desktop personalization and wants a utility that stays out of the way. The first surface is an **Operate** interface: choosing, trying, and controlling a pointer takes precedence over decoration.
+## Users
 
-## Confirmed and assumed
+Mac owners who enjoy desktop personalization and want a friendly, low-friction way to choose and try a distinctive pointer inside Octapuss. The primary workflow is occasional customization rather than continuous administration.
 
-| Item | Status |
-| --- | --- |
-| Name: Octapuss | User supplied |
-| Platform: macOS | User supplied |
-| Initial feature: custom mouse pointer appearance | User supplied |
-| Theme: octopus + cat | User supplied |
-| Plan before implementation | User supplied; Phase 0 is now implemented |
-| Pointer should work across other apps | Working assumption; clarification requested |
-| Static pointer first; animation later | Proposed scope to keep version one small |
-| Native SwiftUI/AppKit, local data, no account | Architecture recommendation |
-| macOS 14+ deployment target | Provisional; retain only if tested and needed |
-| Direct local beta before choosing a store route | Recommendation, dependent on cursor backend |
+## Product Purpose
 
-## First release
+Octapuss makes app-local pointer customization playful, precise, and easy to reverse. Success means a user can choose a style, verify its real hotspot on ordinary controls, and return to the system pointer without granting unrelated permissions.
 
-One arrow family with three color presets: **Ink**, **Tide**, and **Blush**. A recognizable arrow apex is the click hotspot; small cat-ear or tentacle details sit behind it.
+## Positioning
 
-The release includes:
+Octapuss combines a real AppKit cursor preview with an original cat-and-octopus character system. It treats cursor accuracy and restoration as part of the experience rather than hiding those details behind decorative mockups.
 
-- An actual-size preview inside Octapuss, with light and dark test surfaces.
-- Pointer selection and Small / Medium / Large sizes; proposed artwork canvas sizes are 24 / 32 / 40 logical points, subject to visual testing.
-- A clearly scoped Enable action, Pause/Resume, and Restore system pointer.
-- A persistent menu-bar control and a small customization window.
-- Saved pack, size, and appearance preferences.
-- Permission guidance only when the selected engine needs it.
-- Clear runtime status, safe shutdown, and an off-by-default first launch.
+## Operating Context
 
-**Release scope depends on Phase 0.** True system-wide replacement is the desired assumption. An overlay with the native pointer still visible is a pointer companion and must be named that way. A preview-only app or companion is an alternative requiring a product decision, not a completed version of the assumed global-pointer feature.
+- A native macOS utility with a main customization window, Settings, and menu-bar access.
+- The first supported scope is **app-local customization inside Octapuss**.
+- The preview includes light and dark test surfaces, text, and a normal button for visual and click-position checks.
+- The app launches with across-app effects off and keeps Restore available.
 
-## Deferred
+## Capabilities and Constraints
 
-Animated pointers, trails, sound, pack import/export, a pointer editor, per-app rules, cloud sync, accounts, payments, automatic updates, theme scheduling, Windows/Linux versions, and global automatic arrow/I-beam/resize detection.
+- Three static pointer presets: Ink, Tide, and Blush.
+- Small, Medium, and Large sizes with a hotspot that scales with the artwork.
+- App-local cursor rectangles use public AppKit APIs.
+- Across-app companion and cursor-hiding experiments have been removed from the app-local executable. Their historical findings remain in the feasibility report.
+- System-wide cursor replacement is not established and must never be claimed.
+- Store only selected appearance preferences. Do not collect pointer history, typing, screenshots, clicked content, or application activity.
+- Use SwiftUI for the interface and AppKit at native cursor boundaries. The current proof builds with Command Line Tools; a full Xcode project remains future work.
+- Animated pointers, trails, sound, import/export, editing, per-app rules, accounts, cloud sync, and automatic global cursor-role detection are deferred.
 
-Launch at login can follow the first dependable beta. Reopening Octapuss must initially restore preferences without automatically activating the effect.
+## Brand Commitments
 
-## Success criteria
+- Product name: **Octapuss**.
+- Identity: a cat and octopus hybrid expressed through ears, rounded forms, and small tentacle details.
+- Emotional range: cute, engaging, joyful, reassuring, and never childish or distracting.
+- Voice: warm and concise. Controls still name their actual action and scope.
+- Familiar macOS controls and system typography remain part of the product identity.
 
-These are targets, not measured results:
+## Evidence on Hand
 
-1. A new user can select and preview a pointer without granting unrelated permissions.
-2. Every supported size keeps the visible arrow apex aligned with the real click position.
-3. The enabled effect remains accurate during the explicitly tested cross-app workflow.
-4. Pause and Restore stop across-app effects and leave a usable system pointer outside the labeled preview. Quit also removes the preview cursor.
-5. Runtime status never claims global replacement when only preview or companion behavior is available.
-6. The app handles the compatibility and recovery cases in [the test plan](docs/TEST_PLAN.md).
+- Runnable Phase 0 source: `Phase0/OctapussProof.swift`.
+- Reproducible builder: `scripts/build-phase0.sh`.
+- Platform findings and measured limits: `docs/FEASIBILITY_RESULTS.md`.
+- Product architecture, implementation order, and test coverage are recorded in `docs/`.
+- No final mascot illustration, production cursor asset set, customer evidence, or compatibility matrix exists yet; future work must not fabricate them.
 
-## Decisions still open
+## Product Principles
 
-- Confirm whether the first release needs actual global replacement, animation, or only in-app customization.
-- If public APIs cannot deliver global replacement, choose whether to investigate an isolated private-API backend, accept a pointer companion, or pause that feature.
-- Confirm minimum macOS version, Intel support, and distribution route after the first experiment.
-- Review the proposed visual direction and pointer sketches before final asset production.
+1. **Truth before magic.** Name app-local preview and experimental behavior exactly as implemented.
+2. **The tip stays trustworthy.** Decoration grows away from the click point, and every size preserves hotspot alignment.
+3. **Joy supports the task.** Character appears in selection, preview, first use, and recovery without replacing standard controls.
+4. **Restoration is a feature.** Restore and Quit must unwind every effect owned by Octapuss.
+5. **Private by default.** Personalization stays local and requires no activity collection.
 
-Restore preserves the in-app preview so the user can continue trying styles. Its status must make that scope clear. If restoration fails, retain recovery ownership and show an explicit recovery state rather than claiming customization is off.
+## Accessibility & Inclusion
 
-The implementation model should resolve open decisions through evidence or user direction, rather than silently expanding or reducing the scope.
+Support keyboard navigation, VoiceOver labels, visible focus, increased contrast, reduced motion, and status text that does not depend on color. Keep pointer silhouettes recognizable across supported sizes and light/dark preview surfaces.
+
+## Open Decisions
+
+- Minimum supported macOS version and Intel support after a matching full Xcode toolchain is available.
+- Distribution route after an Xcode project, signing configuration, and complete manual verification exist.

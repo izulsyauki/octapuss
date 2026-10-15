@@ -4,7 +4,7 @@ set -euo pipefail
 
 project_root="${0:A:h:h}"
 output_root="${OCTAPUSS_BUILD_DIR:-/tmp/octapuss-phase0}"
-app_path="$output_root/Octapuss Cursor Lab.app"
+app_path="$output_root/Octapuss.app"
 contents_path="$app_path/Contents"
 executable_path="$contents_path/MacOS/OctapussProof"
 default_sdk="/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk"
@@ -34,6 +34,18 @@ case "$architecture" in
         ;;
 esac
 
+if [[ "${1:-}" == "--check" ]]; then
+    xcrun swiftc -parse-as-library -D OCTAPUSS_CHECKS \
+        -target "$architecture-apple-macos14.0" -sdk "$sdk_path" \
+        -module-cache-path "$module_cache" \
+        -framework AppKit -framework SwiftUI \
+        "$project_root/Phase0/OctapussProof.swift" \
+        "$project_root/OctapussTests/RegressionChecks.swift" \
+        -o "$module_cache/RegressionChecks"
+    "$module_cache/RegressionChecks"
+    exit
+fi
+
 CLANG_MODULE_CACHE_PATH="$module_cache" \
 SWIFT_MODULECACHE_PATH="$module_cache" \
 xcrun swiftc \
@@ -41,7 +53,6 @@ xcrun swiftc \
     -target "$architecture-apple-macos14.0" \
     -sdk "$sdk_path" \
     -framework AppKit \
-    -framework CoreGraphics \
     -framework SwiftUI \
     "$project_root/Phase0/OctapussProof.swift" \
     -o "$executable_path"
