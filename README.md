@@ -35,6 +35,8 @@ The redesigned library shows every imported cursor in the selected set. Built-in
 
 Choose a preset or imported set and size, then press Apply to register it outside Octapuss. Selection changes remain a preview until Apply is pressed again. Restore restores every owned slot and pauses the local preview; Resume reactivates only the local preview. A durable backup and temporary crash-recovery subprocess protect applied registrations. Nothing is installed at login.
 
+While Octapuss is running, the applied artwork resumes after sleep or unlock. Manual Restore cancels automatic resumption. Quit restores the system pointer; this does not install persistence across logout or reboot.
+
 If Octapuss reports **Pointer color override**, open System Settings → Accessibility → Display → Pointer and choose **Reset Colors**, then Apply again. Custom macOS outline/fill colors can override cursor themes. Octapuss leaves those preferences unchanged and explains the conflict.
 
 Build with the installed Command Line Tools:

@@ -27,3 +27,11 @@ Older imports containing only a first frame require **Update set from folder…*
 Reproduce safe checks with `rtk proxy zsh scripts/build-phase0.sh --check`. Set `OCTAPUSS_PACK_FIXTURE_PATH` to an unzipped fixture folder to add its decode checks. For an authorized live test, set `OCTAPUSS_LIVE_PACK_FOLDER` and use `--check-system-live`; it temporarily changes system registrations, restores them, and kills only its own test worker. Set `OCTAPUSS_RENDER_PACK_PATH` and use `--render-library` for app-owned visual fixtures.
 
 Full Xcode/XCTest, other hardware/OS versions, exhaustive VoiceOver/keyboard operation, multiple displays, fullscreen/protected contexts, sleep/session transitions, and notarized distribution remain **untested**. The tested build path is Command Line Tools. Fixture artwork remains user-owned local input and is not bundled or committed.
+
+## Sleep and lock persistence
+
+The app remembers the exact successfully applied snapshots in memory, independent of subsequent selection, size, role edits, or removal from the library. Sleep, session deactivation, and screen lock temporarily restore owned registrations while retaining that intent. Once all overlapping suspension reasons end, a cancellable 750 ms delay lets WindowServer settle before reapplying the saved snapshots through the journaled backend. Workspace sleep/session notifications use `NSWorkspace.notificationCenter`; lock/unlock additionally use the conventional distributed `com.apple.screenIsLocked` / `com.apple.screenIsUnlocked` notifications, whose delivery is not a public AppKit guarantee.
+
+Manual Restore cancels the saved intent and pending task immediately, including when restoration reports an error. Quit also cancels it and restores the baseline; persistence across quitting, crashing, logout, or reboot is not enabled. A failed automatic resume reports an error rather than claiming the pack is applied. Accessibility color overrides continue to block registration.
+
+Safe regression checks exercise overlapping lock/sleep/session sequences, exact saved artwork, duplicate return events, and cancellation by Restore, with fake native registrations and actual journal restoration. A physical sleep/lock/unlock cycle remains **untested** by automation on this host; this evidence does not claim screen-lock notification delivery on every macOS release.

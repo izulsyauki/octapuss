@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -118,6 +119,8 @@ final class ProofStore: ObservableObject {
     @Published private(set) var systemNeedsRecovery = false
     @Published private(set) var systemColorOverride = false
     private var systemSession: SystemCursorSession?
+    private var cursorContinuation = CursorContinuation()
+    private var resumeTask: Task<Void, Never>?
     private var recoveredOnLaunch = false
     @Published private(set) var importedCursors: [ImportedCursor] = []
     @Published var selectedImportedID: UUID? {
@@ -326,9 +329,13 @@ final class ProofStore: ObservableObject {
             }
             if let result = packResult { replacements = result.snapshots }
             transactionStarted = true
+            resumeTask?.cancel()
+            resumeTask = nil
+            cursorContinuation.cancel()
             try session.prepareForApplication()
             systemApplied = false
             try session.apply(replacements)
+            cursorContinuation.applied(replacements)
             systemApplied = true
             previewEnabled = true
             systemAppliedAsPack = packResult != nil
@@ -352,6 +359,13 @@ final class ProofStore: ObservableObject {
     }
 
     func restore() {
+        resumeTask?.cancel()
+        resumeTask = nil
+        cursorContinuation.cancel()
+        restoreRegistrations()
+    }
+
+    private func restoreRegistrations() {
         previewEnabled = false
         NSCursor.arrow.set()
         do {
@@ -366,6 +380,50 @@ final class ProofStore: ObservableObject {
         } catch {
             systemNeedsRecovery = true
             diagnostic = "Restoration incomplete: \(error.localizedDescription)"
+        }
+    }
+
+    func suspendSystemCursor(for reason: CursorContinuation.Suspension) {
+        resumeTask?.cancel()
+        resumeTask = nil
+        let shouldRestore = cursorContinuation.suspend(reason)
+        guard shouldRestore else { return }
+        let wasPreviewEnabled = previewEnabled
+        restoreRegistrations()
+        previewEnabled = wasPreviewEnabled
+        if !systemNeedsRecovery { diagnostic = "Your applied cursor will resume when you return." }
+    }
+
+    func resumeSystemCursor(after reason: CursorContinuation.Suspension) {
+        cursorContinuation.returned(reason)
+        guard cursorContinuation.canResume else { return }
+        resumeTask?.cancel()
+        // Let WindowServer finish restoring the user session before registering artwork.
+        resumeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 750_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.reapplyRememberedCursor()
+        }
+    }
+
+    private func reapplyRememberedCursor() {
+        guard cursorContinuation.canResume, let session = systemSession else { return }
+        systemColorOverride = PointerColorCompatibility.hasOverride()
+        guard !systemColorOverride else {
+            diagnostic = "Your cursor could not resume because macOS pointer colors override themes. Reset Colors, then Apply again."
+            return
+        }
+        do {
+            try session.prepareForApplication()
+            try session.apply(cursorContinuation.snapshots)
+            cursorContinuation.didResume()
+            systemApplied = true
+            systemNeedsRecovery = false
+            diagnostic = "Your applied cursor resumed. Restore system pointer turns it off."
+        } catch {
+            systemApplied = false
+            systemNeedsRecovery = session.hasPendingRecovery
+            diagnostic = "Your cursor could not resume: \(error.localizedDescription). Choose Apply to try again."
         }
     }
 
@@ -819,7 +877,30 @@ struct ProofCommands: Commands {
 
 @MainActor
 final class ProofAppDelegate: NSObject, NSApplicationDelegate {
-    weak var store: ProofStore?
+    weak var store: ProofStore? {
+        didSet { observeCursorLifecycle() }
+    }
+    private var lifecycleObservers = Set<AnyCancellable>()
+
+    private func observeCursorLifecycle() {
+        guard store != nil, lifecycleObservers.isEmpty else { return }
+        let workspace = NSWorkspace.shared.notificationCenter
+        let distributed = DistributedNotificationCenter.default()
+        let events: [(NotificationCenter, Notification.Name, CursorContinuation.Suspension, Bool)] = [
+            (workspace, NSWorkspace.willSleepNotification, .sleep, false),
+            (workspace, NSWorkspace.didWakeNotification, .sleep, true),
+            (workspace, NSWorkspace.sessionDidResignActiveNotification, .session, false),
+            (workspace, NSWorkspace.sessionDidBecomeActiveNotification, .session, true),
+            (distributed, Notification.Name("com.apple.screenIsLocked"), .lock, false),
+            (distributed, Notification.Name("com.apple.screenIsUnlocked"), .lock, true)
+        ]
+        for (center, name, reason, returning) in events {
+            center.publisher(for: name).receive(on: RunLoop.main).sink { [weak self] _ in
+                if returning { self?.store?.resumeSystemCursor(after: reason) }
+                else { self?.store?.suspendSystemCursor(for: reason) }
+            }.store(in: &lifecycleObservers)
+        }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         DispatchQueue.main.async {
@@ -853,12 +934,6 @@ struct OctapussProofApp: App {
                 .onAppear {
                     appDelegate.store = store
                     store.recoverSystemPointerIfNeeded()
-                }
-                .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.willSleepNotification)) { _ in
-                    store.restore()
-                }
-                .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.sessionDidResignActiveNotification)) { _ in
-                    store.restore()
                 }
         }
         .defaultSize(width: 1080, height: 760)
