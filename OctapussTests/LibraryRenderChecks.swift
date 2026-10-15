@@ -16,13 +16,18 @@ struct LibraryRenderChecks {
         defer { try? FileManager.default.removeItem(at: libraryURL) }
         let store = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
         let packPath = ProcessInfo.processInfo.environment["OCTAPUSS_RENDER_PACK_PATH"] ?? "/tmp/octapuss-import-fixtures"
-        store.importCursorFolder(URL(fileURLWithPath: packPath))
+        let packURL = URL(fileURLWithPath: packPath)
+        if packURL.pathExtension.lowercased() == "cursor" { store.importCursorFiles([packURL]) }
+        else { store.importCursorFolder(packURL) }
         let importedID = store.selectedImportedID
-        guard store.selectedCollection?.cursors.isEmpty == false else {
+        guard let collection = store.selectedCollection, !collection.cursors.isEmpty else {
             throw CursorImportError.invalid("Generate the three synthetic fixtures with OCTAPUSS_IMPORT_FIXTURE_DIR=/tmp/octapuss-import-fixtures and --check first.")
         }
-        for imported in [false, true] {
-            if imported { store.selectedImportedID = importedID } else { store.pack = .blush }
+        let collectionID = collection.id
+        for state in ["builtin", "imported", "deleted"] {
+            if state == "imported" { store.selectedImportedID = importedID }
+            else if state == "deleted" { store.deleteCursorPack(id: collectionID) }
+            else { store.pack = .blush }
             for dark in [false, true] {
                 for (name, size) in [("default", NSSize(width: 1080, height: 760)), ("minimum", NSSize(width: 900, height: 640))] {
                     let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [], backing: .buffered, defer: false)
@@ -40,7 +45,7 @@ struct LibraryRenderChecks {
                     guard let png = bitmap.representation(using: .png, properties: [:]) else {
                         throw CursorImportError.invalid("PNG render unavailable.")
                     }
-                    let filename = "\(imported ? "imported" : "builtin")-\(dark ? "dark" : "light")-\(name).png"
+                    let filename = "\(state)-\(dark ? "dark" : "light")-\(name).png"
                     try png.write(to: root.appendingPathComponent(filename))
                     print(root.appendingPathComponent(filename).path)
                     window.contentView = nil

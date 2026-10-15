@@ -175,6 +175,8 @@ Rounded rectangles soften the collection without obscuring control roles: search
 
 Apply pack and Apply system arrow share the native bordered-prominent button tinted lavender. The label reflects whether the current selection applies assigned pack roles or a single arrow. Restore, Resume preview, and Settings retain native macOS behavior. No custom button radius, shadow, or animation token is asserted: those are platform-owned. Apply is explicit; selecting a set, tile, size, or test background changes the local preview, and editing a role saves the mapping for the next Apply.
 
+Imported packs expose a small, labeled **Delete pack…** button in the workbench header and the same destructive action in their sidebar context menu. Both open a native confirmation that names the pack, states its cursor count, and explains that original files and the applied system cursor are preserved. Cancel leaves the library unchanged. Built-in packs have no deletion action. Keep deletion secondary to browsing and explicit Apply; use the native destructive confirmation rather than adding a permanent red accent to the library.
+
 ### Search field
 
 A plain native text field and magnifying-glass symbol share a rounded surface. A named clear button appears while search has content. Search matches set names and imported filenames. Focus is native; the field's accessibility label is Search cursor sets.
@@ -196,6 +198,8 @@ Add to your collection offers native file and unzipped-folder import. Empty coll
 ### Playground and action bar
 
 The AppKit preview owns cursor rectangles and the Boop button in one view. It preserves hotspot scaling and uses real cursor feedback. The action bar gives status, diagnostic text, explicit Apply, Restore, and paused-preview recovery a stable location. Applied status must describe the arrow or pack actually applied, even after browsing changes.
+
+After pack deletion, **Undo deletion** appears beside the diagnostic text in the bottom action bar, outside the scrolling content. It restores the most recently deleted pack, including its cursor identities, metadata, and prior imported selection when that selection belonged to the pack. Undo remains available until used, replaced by a later pack deletion, or Octapuss quits; it is not a timed toast. Deleting the selected pack falls back to another imported pack or the current built-in pack. Save failures keep the visible library and deletion recovery intact and report the failure in the diagnostic row.
 
 ANI playback in the local playground retains the imported sequence and timing. It pauses for Reduce Motion, hidden or detached views, and an inactive window. The inspector shows frame count, an upgrade action for older first-frame imports, or a labeled first-frame fallback for incomplete ANI files. Native pack application uses at most 24 uniform animation steps; describe that limit without implying the local original sequence is reduced. Animation belongs to the cursor artwork and must not change pointer movement or introduce mascot motion.
 

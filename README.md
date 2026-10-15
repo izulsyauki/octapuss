@@ -33,6 +33,12 @@ Native property-list `.cursor` themes such as **Anya.cursor** can also be import
 
 The redesigned library shows every imported cursor in the selected set. Built-in templates show their custom arrow plus native macOS shapes, clearly labeled as unchanged. See [the redesign and references](docs/UI_REDESIGN.md) and [import formats, limits, and verification](docs/CURSOR_IMPORT.md).
 
+## Delete a cursor pack
+
+Select an imported pack and click **Delete pack…** beside its title, or right-click its sidebar entry. Confirm the named pack and cursor count. **Undo deletion** restores the last deleted pack until another deletion or app quit. Built-in packs cannot be deleted.
+
+This removes the pack from Octapuss's library; original files and any applied system cursor stay unchanged. Use **Restore system pointer** to turn off the applied effect. See [deletion and Undo behavior](docs/PACK_DELETION.md).
+
 ## Phase 0 proof
 
 Choose a preset or imported set and size, then press Apply to register it outside Octapuss. Selection changes remain a preview until Apply is pressed again. Restore restores every owned slot and pauses the local preview; Resume reactivates only the local preview. A durable backup and temporary crash-recovery subprocess protect applied registrations. Nothing is installed at login.

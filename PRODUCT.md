@@ -30,6 +30,7 @@ Octapuss combines a real AppKit cursor preview with an original cat-and-octopus 
 - Three static pointer presets: Ink, Tide, and Blush.
 - Local import of Windows `.cur` and animated `.ani` files, with persistent sets, preserved hotspots/aspect ratio, preview, conservative filename role matching, and explicit pack application. Every imported member appears in the gallery with an editable role. ZIP sets must be unzipped first; legacy first-frame imports can be updated from their original folder.
 - Native property-list `.cursor` themes such as Anya import as complete sets, retaining animation and distinct native variants. Unknown schemas or invalid native role metadata are rejected; see `docs/NATIVE_THEMES.md`.
+- Imported packs can be deleted from the library with a named confirmation and one-level Undo. Original downloads and applied system effects remain independent; built-in packs are protected.
 - Small, Medium, and Large sizes with a hotspot that scales with the artwork.
 - App-local cursor rectangles use public AppKit APIs.
 - Across-app companion and cursor-hiding experiments have been removed from the app-local executable. Their historical findings remain in the feasibility report.

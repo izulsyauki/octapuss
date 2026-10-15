@@ -123,6 +123,8 @@ final class ProofStore: ObservableObject {
     private var resumeTask: Task<Void, Never>?
     private var recoveredOnLaunch = false
     @Published private(set) var importedCursors: [ImportedCursor] = []
+    @Published private(set) var lastDeletedPack: CursorCollection?
+    private var deletedPackSelection: UUID?
     @Published var selectedImportedID: UUID? {
         didSet { defaults.set(selectedImportedID?.uuidString, forKey: "selectedImportedCursor") }
     }
@@ -303,8 +305,42 @@ final class ProofStore: ObservableObject {
             let setID = selectedImportedCursor?.setID
             importedCursors = next
             selectedImportedID = next.first { $0.setID == setID }?.id
-            diagnostic = "Removed from your library. The applied system arrow and original download are unchanged."
+            diagnostic = "Removed from your library. The applied cursor and original download are unchanged."
         } catch { diagnostic = error.localizedDescription }
+    }
+
+    func deleteCursorPack(id: UUID) {
+        guard let library, let collection = cursorCollections.first(where: { $0.id == id }) else { return }
+        let next = importedCursors.filter { $0.setID != id }
+        let deletedSelection = collection.cursors.contains { $0.id == selectedImportedID } ? selectedImportedID : nil
+        do {
+            try library.save(next)
+            lastDeletedPack = collection
+            deletedPackSelection = deletedSelection
+            importedCursors = next
+            if deletedSelection != nil {
+                selectedImportedID = cursorCollections.first?.cursors.first?.id
+            }
+            diagnostic = "Deleted “\(collection.name)” from your library. Your applied cursor and original files are unchanged."
+        } catch {
+            diagnostic = "The pack could not be deleted: \(error.localizedDescription). Your library is unchanged."
+        }
+    }
+
+    func undoPackDeletion() {
+        guard let library, let deleted = lastDeletedPack else { return }
+        let existingIDs = Set(importedCursors.map(\.id))
+        let next = importedCursors + deleted.cursors.filter { !existingIDs.contains($0.id) }
+        do {
+            try library.save(next)
+            importedCursors = next
+            if let selection = deletedPackSelection { selectedImportedID = selection }
+            lastDeletedPack = nil
+            deletedPackSelection = nil
+            diagnostic = "“\(deleted.name)” is back in your library. Your applied cursor is unchanged."
+        } catch {
+            diagnostic = "The pack could not be restored: \(error.localizedDescription). Undo is still available."
+        }
     }
 
     var statusTitle: String {

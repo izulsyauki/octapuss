@@ -9,6 +9,8 @@ struct CursorLibraryView: View {
     @EnvironmentObject private var store: ProofStore
     @Environment(\.openSettings) private var openSettings
     @State private var search = ""
+    @State private var packToDelete: CursorCollection?
+    @State private var showingDeleteConfirmation = false
 
     private let columns = [GridItem(.adaptive(minimum: 126, maximum: 180), spacing: 12)]
     private var collections: [CursorCollection] {
@@ -33,6 +35,12 @@ struct CursorLibraryView: View {
         .frame(minWidth: 900, minHeight: 640)
         .background(Color(nsColor: AppPalette.background))
         .tint(Color(nsColor: AppPalette.lavender))
+        .alert("Delete cursor pack?", isPresented: $showingDeleteConfirmation, presenting: packToDelete) { collection in
+            Button("Cancel", role: .cancel) { }
+            Button("Delete pack", role: .destructive) { store.deleteCursorPack(id: collection.id) }
+        } message: { collection in
+            Text("Remove “\(collection.name)” and its \(collection.cursors.count) cursor\(collection.cursors.count == 1 ? "" : "s") from your library?\n\nYour original files and applied system cursor stay unchanged. You can undo the last pack deletion until Octapuss quits.")
+        }
     }
 
     private var sidebar: some View {
@@ -78,6 +86,11 @@ struct CursorLibraryView: View {
                                image: set.cursors[0].image(longestSide: 32),
                                selected: store.selectedCollection?.id == set.id,
                                accent: AppPalette.lavender) { store.selectedImportedID = set.cursors[0].id }
+                            .contextMenu {
+                                Button(role: .destructive) { requestDeletion(of: set) } label: {
+                                    Label("Delete pack…", systemImage: "trash")
+                                }
+                            }
                     }
                     if store.cursorCollections.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -126,6 +139,14 @@ struct CursorLibraryView: View {
                         .font(.system(size: 12)).foregroundStyle(Color(nsColor: AppPalette.secondaryText))
                 }
                 Spacer(minLength: 8)
+                if let collection = store.selectedCollection {
+                    Button { requestDeletion(of: collection) } label: {
+                        Label("Delete pack…", systemImage: "trash")
+                    }
+                    .controlSize(.small)
+                    .help("Delete this imported pack from your library")
+                    .accessibilityLabel("Delete \(collection.name) pack")
+                }
                 Button { openSettings() } label: { Image(systemName: "gearshape") }
                     .accessibilityLabel("Settings")
                     .help("Settings")
@@ -264,10 +285,19 @@ struct CursorLibraryView: View {
                 Button(store.applyActionTitle) { store.applySystemArrow() }
                     .buttonStyle(.borderedProminent)
             }
-            Text(store.diagnostic).font(.system(size: 11)).foregroundStyle(Color(nsColor: AppPalette.secondaryText))
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(store.diagnostic).font(.system(size: 11)).foregroundStyle(Color(nsColor: AppPalette.secondaryText))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let deleted = store.lastDeletedPack {
+                    Button("Undo deletion") { store.undoPackDeletion() }
+                        .controlSize(.small)
+                        .help("Restore “\(deleted.name)” to your library")
+                        .accessibilityLabel("Undo deletion of \(deleted.name)")
+                }
+            }
         }
         .padding(.horizontal, 22).padding(.vertical, 14)
         .background(Color(nsColor: AppPalette.surface))
@@ -275,6 +305,11 @@ struct CursorLibraryView: View {
 
     private var selectedRoleCount: Int {
         Set(store.selectedPackPlan.mapped.compactMap(\.effectiveRole)).count
+    }
+
+    private func requestDeletion(of collection: CursorCollection) {
+        packToDelete = collection
+        showingDeleteConfirmation = true
     }
 }
 

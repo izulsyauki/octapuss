@@ -127,6 +127,44 @@ enum CursorImportChecks {
         let reloadedSets = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
         precondition(reloadedSets.selectedCollection?.id == set.id && reloadedSets.selectedCollection?.cursors.count == 3)
 
+        let beforeDeletion = reloadedSets.importedCursors
+        let beforeSelection = reloadedSets.selectedImportedID
+        reloadedSets.deleteCursorPack(id: UUID())
+        precondition(reloadedSets.importedCursors.count == beforeDeletion.count && reloadedSets.lastDeletedPack == nil,
+                     "Unknown and built-in identifiers must not delete imported artwork")
+        reloadedSets.deleteCursorPack(id: set.id)
+        precondition(!reloadedSets.importedCursors.contains { $0.setID == set.id })
+        precondition(reloadedSets.importedCursors.count == beforeDeletion.count - 3)
+        precondition(reloadedSets.lastDeletedPack?.cursors.count == 3)
+        precondition(reloadedSets.selectedImportedID != beforeSelection)
+        precondition(FileManager.default.fileExists(atPath: setFolder.appendingPathComponent("Arrow.cur").path),
+                     "Deleting a pack must leave the original files untouched")
+        let deletedSaved = try CursorLibrary(url: libraryURL).load()
+        precondition(!deletedSaved.contains { $0.setID == set.id }, "Whole-pack deletion must survive relaunch")
+        reloadedSets.undoPackDeletion()
+        precondition(Set(reloadedSets.importedCursors.map(\.id)) == Set(beforeDeletion.map(\.id)))
+        precondition(reloadedSets.selectedImportedID == beforeSelection && reloadedSets.lastDeletedPack == nil)
+        let restored = try CursorLibrary(url: libraryURL).load()
+        precondition(restored.first { $0.id == set.cursors[0].id }?.effectiveRole == .copy,
+                     "Undo must restore manual assignments and original cursor IDs")
+        reloadedSets.undoPackDeletion()
+        precondition(reloadedSets.importedCursors.count == beforeDeletion.count, "Repeated Undo must not duplicate a pack")
+        reloadedSets.pack = .tide
+        reloadedSets.deleteCursorPack(id: set.id)
+        precondition(reloadedSets.selectedImportedID == nil && reloadedSets.pack == .tide,
+                     "Deleting an unselected pack must preserve the current preview")
+        reloadedSets.undoPackDeletion()
+        precondition(reloadedSets.selectedImportedID == nil)
+        // Force an atomic-save failure without altering the user's library.
+        try FileManager.default.removeItem(at: libraryURL)
+        try FileManager.default.createDirectory(at: libraryURL, withIntermediateDirectories: false)
+        reloadedSets.deleteCursorPack(id: set.id)
+        precondition(reloadedSets.importedCursors.count == beforeDeletion.count && reloadedSets.lastDeletedPack == nil,
+                     "A failed save must leave the pack and Undo state unchanged")
+        try FileManager.default.removeItem(at: libraryURL)
+        try CursorLibrary(url: libraryURL).save(beforeDeletion)
+        print("Pack deletion checks passed: whole set, unrelated packs, original files, persistence, Undo, selection, failed save.")
+
         if let path = ProcessInfo.processInfo.environment["OCTAPUSS_IMPORT_FIXTURE_DIR"] {
             let fixtures = URL(fileURLWithPath: path)
             try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: true)
