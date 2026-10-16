@@ -40,7 +40,9 @@ The user subsequently identified **Anya** and described resize, text, loading, a
 
 Registration now keeps global application enabled and sets `instantly = false`. The same boundary is used by Apply, Restore, resume, rollback, and watchdog recovery; it no longer explicitly displays every intermediate role. macOS remains responsible for selecting the appropriate semantic cursor. A test callback at the actual native-write boundary verifies both flags, image/frame/geometry metadata, and error propagation without real cursor writes.
 
-The Anya fixture and complete safe suite passed. A new live Anya check passed **53-slot Apply/Restore and SIGKILL watchdog recovery**, including baseline pixels, sizes, hotspots, and journal cleanup. The signed repaired build at `.build/quiet-registration/Octapuss.app` was opened and Anya reapplied at Medium; the UI reported **12 roles across 53 slots**. Human confirmation of disappearance of the visible cycling is pending. This change fixes forced intermediate displays; it does not claim universal replacement of app-drawn/protected cursors or every OS loading condition.
+The Anya fixture and complete safe suite passed. A new live Anya check passed **53-slot Apply/Restore and SIGKILL watchdog recovery**, including baseline pixels, sizes, hotspots, and journal cleanup. The signed repaired build at `.build/quiet-registration/Octapuss.app` was opened and Anya reapplied at Medium; the UI reported **12 roles across 53 slots**. The user confirmed that the unrelated-shape cycling stopped. This change fixes forced intermediate displays; it does not claim universal replacement of app-drawn/protected cursors or every OS loading condition.
+
+The user then asked why Busy no longer appears while changing a pack. Anya's original Wait entry is one static frame; its Working entry has 15 frames at 100 ms. Pack application no longer forces the Busy role just to display its artwork. Whether the follow-up requests in-app Apply progress or reports missing artwork during a genuine OS waiting condition is being clarified; no missing Busy mapping has been demonstrated.
 
 ## Resource measurements
 
