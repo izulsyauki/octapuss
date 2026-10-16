@@ -1,0 +1,40 @@
+name: macOS validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-check:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Record toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          sw_vers
+          uname -m
+      - name: Build Release with Xcode
+        run: >-
+          xcodebuild -project Octapuss.xcodeproj -scheme Octapuss
+          -configuration Release -derivedDataPath "$RUNNER_TEMP/OctapussDerivedData"
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Run isolated native regression checks
+        shell: zsh {0}
+        run: |
+          export OCTAPUSS_SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
+          zsh scripts/build-phase0.sh --check
