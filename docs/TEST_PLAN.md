@@ -1,6 +1,6 @@
 # Octapuss verification plan
 
-Planning targets, not completed test results. Prioritize engine behavior and recovery; static screenshot quality cannot prove cursor correctness.
+Current test contract, updated 16 October 2026. Prioritize engine behavior and recovery; static screenshots cannot prove cursor correctness. Results and remaining gates live in [STABILITY_REPORT.md](STABILITY_REPORT.md). Historical overlay checks below apply only if that route is reintroduced; the current backend registers native cursor roles and does not track pointer movement.
 
 ## Focused automated checks
 
@@ -27,7 +27,7 @@ Use a fake backend for state transitions and resource ownership; validate actual
 | Displays | Single Retina; available non-Retina; secondary display left/above primary; unplug/replug | No jump, clipped art, or hotspot drift |
 | Workspaces | Spaces, Mission Control, fullscreen, Stage Manager | Exact supported behavior recorded; no universal coverage claim |
 | Settings | Deny/grant/revoke access; corrupted preferences | Useful recovery, truthful state, no unrelated permission request |
-| Lifecycle | Pause, Restore, repeated toggles, window close, Quit, sleep/wake, session switch; Restore/Quit while inside preview | Across-app effects stop; labeled preview remains after Restore; Quit removes preview cursor |
+| Lifecycle | Restore, repeated toggles, window close, Dock Quit, menu-bar Quit, sleep/wake, session switch; Restore/Quit inside preview | Restore pauses preview and restores owned slots; Dock Quit keeps the session active; full menu-bar Quit restores and exits |
 | Forced exit | Force Quit / process termination while active; relaunch | Pointer remains/restores usable; relaunch never auto-enables; unresolved effects enter recovery |
 | UI | Light/dark; minimum/default sizes; every runtime state | Controls fit, messages reflect actual scope, no clipping |
 | Accessibility | Keyboard-only, VoiceOver, increased contrast, reduced motion | Every action reachable; focus and state intelligible |
@@ -55,7 +55,7 @@ These are engineering goals, not existing benchmarks. Report observed values eve
 
 ## Recovery contract
 
-Restore means removing **Octapuss-owned across-app effects**, leaving a usable system pointer outside the labeled test region, and keeping pack/size preferences. Entering the preview still shows its custom cursor; Quit removes the preview region too. Verify Restore and Quit while the pointer is inside that region. For a private system-cursor route, define whether restoration means the captured pre-Octapuss baseline and how it behaves alongside another customization tool. Do not blindly overwrite somebody else's active theme.
+Restore means removing **Octapuss-owned across-app effects**, retaining pack/size preferences, and pausing the local preview until Resume. Restoration uses the captured pre-Octapuss baseline while preserving later changes owned by another utility. Dock Quit is a background action and must preserve the applied session; menu-bar **Quit Octapuss** restores and exits. Verify Restore and full Quit while inside the playground, plus background/reopen without losing applied artwork.
 
 Exercise Restore and Quit from Starting, NeedsPermission, Active, Paused, Suspended, Error, and RecoveryRequired. Inject a cleanup failure: retain the remaining resource/baseline ownership, show “Restoration incomplete,” prevent a new start, and verify Retry Restore. Off/Paused must require confirmed cleanup. If changes survive process exit, verify the durable recovery record was written before application and is checked on relaunch.
 

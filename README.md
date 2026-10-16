@@ -2,7 +2,7 @@
 
 A native macOS pointer playground with a joyful octopus-and-cat identity.
 
-**Status: native cursor-pack experiment · 15 October 2026.** The SwiftUI/AppKit app supports explicit full-pack application and an independent local playground. The Minecraft fixture maps 13 roles across 56 system slots on this host, including animated loading cursors. See [full-pack behavior and verification](docs/FULL_PACKS.md).
+**Status: stability verification in progress · 16 October 2026.** The SwiftUI/AppKit app supports explicit native cursor-pack application and an independent local playground. The Minecraft fixture maps 13 roles across 56 system slots on this host, including animated loading cursors. See [the current stability report and remaining gates](docs/STABILITY_REPORT.md) and [full-pack verification](docs/FULL_PACKS.md).
 
 The first idea is deliberately small: choose a static pointer style, try it at actual size, and enable or pause it from a native Mac app. The brand combines a cat-eared octopus mascot with clear, practical pointer artwork.
 
@@ -81,6 +81,8 @@ See [the measured Phase 0 result](docs/FEASIBILITY_RESULTS.md) before choosing t
 
 ## Build sequence
 
+The original feasibility milestone is complete on the available Mac. The implementation has progressed through the library, imports, role mapping, recovery, and background utility features; current work is stability verification before a local beta. See [the updated milestone plan](docs/IMPLEMENTATION_PLAN.md). The sequence below describes delivery order, not unimplemented features.
+
 1. Verify the developer tools and prove the cursor approach on this Mac.
 2. Decide the supported product scope from that evidence.
 3. Build the native app shell and one pointer family.
@@ -90,3 +92,14 @@ See [the measured Phase 0 result](docs/FEASIBILITY_RESULTS.md) before choosing t
 **Selected scope:** native cursor-pack customization. This private-API experiment is for direct distribution; App Store compatibility and universal application/OS coverage are not claimed.
 
 No system permissions, login items, helpers, or persistent system cursor changes are installed by the proof.
+
+## Local candidate
+
+Build and package an experimental local candidate:
+
+```sh
+rtk proxy env OCTAPUSS_BUILD_DIR="$PWD/.build/stability" zsh scripts/build-phase0.sh
+rtk proxy zsh scripts/package-local-candidate.sh
+```
+
+The ZIP, checksum, validation report, and recovery instructions are written to `.build/local-candidate/`. This is an ad-hoc signed development candidate. Developer ID signing, notarization, full Xcode validation, and the remaining manual checks are required before an external-release claim. No security settings are bypassed by these scripts.

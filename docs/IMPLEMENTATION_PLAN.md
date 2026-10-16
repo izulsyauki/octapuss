@@ -1,94 +1,43 @@
 # Octapuss implementation plan
 
-**Scope update, 15 October 2026:** the user now requests native system-arrow customization. The app-local repair remains the independent preview baseline. Current backend work, safety requirements, and measured results are in [SYSTEM_CURSOR.md](SYSTEM_CURSOR.md). The older milestone scope below predates this update.
+Updated 16 October 2026. The selected product is a native macOS cursor-pack utility with an independent app-local playground. The original app-local decision was superseded by the system-customization request on 15 October. Historical proof remains in [FEASIBILITY_RESULTS.md](FEASIBILITY_RESULTS.md); current evidence is in [STABILITY_REPORT.md](STABILITY_REPORT.md).
 
-Execution status · **Phase 0 proof completed and app-local customization selected on 1 October 2026.** See [FEASIBILITY_RESULTS.md](FEASIBILITY_RESULTS.md). The app-local behavioral repair is recorded in [REPAIR_VERIFICATION.md](REPAIR_VERIFICATION.md). Global experiments have been removed from the executable; they remain historical evidence only. Phases below describe the remaining productization plan, not a claim that all exit criteria have passed.
+## Milestone status
 
-Current implementation: a minimal `Octapuss.xcodeproj` with shared app scheme exists, but Xcode compilation, signing/capabilities, and XCTest remain untested; no XCTest target exists. Command Line Tools builds and isolated executable native regression checks are recorded in the repair verification. The native preview owns rendering, cursor rectangles, tracking, and the working Boop button, replacing the transparent overlay. Restore pauses the local custom cursor until Resume preview; preset changes and preference reset preserve pause. Style, size, and background persist. Relaunch starts the local preview active with a fresh click count. The window defaults to 840 × 560 pt, has a 760 × 500 pt minimum, and scrollable main content. Preserve existing visual tokens.
+| Milestone | Current result | Remaining gate |
+| --- | --- | --- |
+| 0: Feasibility | Complete on this Mac: native registration, restoration, owned-worker crash recovery | No universal OS/hardware claim |
+| 1: Native shell | Library, Settings, menu bar, background operation, reopen and full Quit implemented | Direct status-menu/Dock and accessibility verification |
+| 2: Artwork and preview | Presets, sizes, CUR/ANI/native-theme import, gallery, manual roles, deletion/Undo implemented | Human hotspot checks across sizes/displays |
+| 3: Engine and recovery | Full-pack Apply, durable journal, ownership checks, rollback, helper, suspension/resumption implemented | Physical lifecycle and workspace matrix |
+| 4: Persistence and guidance | Local library/preferences, explicit Apply, recovery/color diagnostics, preview pause implemented | Complete keyboard and VoiceOver workflows |
+| 5: Local beta verification | In progress | Performance, manual matrix, toolchain and support evidence |
+| External distribution | Deferred until candidate verification and signing | Developer ID, hardened-runtime compatibility, notarization, Gatekeeper |
 
-## Milestones
+## Stability milestone
 
-| Phase | Work | Exit criterion | Depends on |
-| --- | --- | --- | --- |
-| 0 | Toolchain check and native cursor feasibility proof | Evidence report completed; app-local scope selected | Completed proof |
-| 1 | Xcode app shell, shared state, window, Settings, menu bar | Fresh app launches local preview only; Open/Settings/Quit work; closing window keeps utility accessible | Phase 0 route selected |
-| 2 | Bundled pointer metadata, one arrow family, preview, size controls | All presets/sizes preview accurately; invalid assets fail safely | Phase 1 |
-| 3 | Selected cursor backend, session lifecycle, Pause/Restore | Real scope works across its declared contexts; all runtime states truthful | Phase 0 + Phase 2 |
-| 4 | Preference persistence, scope guidance, diagnostics | Relaunch begins with local preview active and preferences retained; no global permissions requested | Phase 3 |
-| 5 | Compatibility, performance, accessibility, and local beta | Required checks pass; untested contexts disclosed; reproducible build available | Phase 4 |
+1. Run regression checks with available fixtures and 100 isolated Apply/Restore cycles, verifying baseline/journal cleanup.
+2. Build the app and validate the packaged helper, metadata, and local signature.
+3. Verify full-pack restoration and owned-worker crash recovery without competing with an active user session.
+4. Measure app-only CPU and resident memory in paused, active, and background states. Distinguish idle samples from movement and long-duration evidence.
+5. Inspect the native UI at minimum/default sizes in both appearances. Check keyboard focus, labels, search, roles, Apply/Restore, import, deletion/Undo, Settings, and menu access.
+6. Check sleep/lock return, logout/restart, fullscreen/Spaces, and display changes. Coordinate disruptive tests; unavailable hardware stays untested.
+7. Fix demonstrated defects, rerun affected checks, and record limitations in one evidence report.
+8. Prepare a local experimental candidate with reproducible build and recovery instructions. External release readiness requires the remaining gates.
 
-Each phase should leave a runnable, reviewable result. Do not build all phases before testing the engine, and do not make a web demo the product implementation.
+## Behavior contract
 
-## Phase 0: prove the difficult part
+- Launch starts the local preview and recovers unresolved prior registrations; system Apply remains explicit.
+- Selection, size, and role edits do not silently replace the applied pack.
+- Restore cancels resumption, restores owned registrations, and pauses the playground.
+- Dock Quit and ⌘Q keep the cursor session running in the menu bar. Menu-bar **Quit Octapuss** restores and exits; restoration errors keep the app open.
+- Sleep, lock, and session deactivation temporarily restore registrations. Return reapplies the exact remembered pack after all suspension reasons clear. No login item or reboot persistence is installed.
+- The private API backend can differ for app-drawn/protected cursors and Windows-only roles. Native animation has a 24-step uniform limit; the preview retains the original sequence.
 
-Follow [FEASIBILITY.md](FEASIBILITY.md). Use one simple diagnostic cursor; branding polish can wait. Produce `FEASIBILITY_RESULTS.md` and a demo before the full app shell. Passing preview or movement tracking alone is insufficient.
+## Build and acceptance
 
-If the selected developer directory remains Command Line Tools, locate an existing full Xcode installation and report what is needed. Do not silently download Xcode or change system settings. A toolchain limitation does not justify claiming a native build was verified.
+The reproducible local route is `rtk proxy zsh scripts/build-phase0.sh`; `--check` runs executable checks. `--check-system-live` is an explicit system-mutating recovery check. The Xcode target and shared scheme exist, but full Xcode is absent and no XCTest target exists. A hosted macOS validation workflow is configured; its first runs were blocked before execution by a GitHub account billing restriction. Command Line Tools success is not Xcode/XCTest validation.
 
-If public global replacement fails, finish the evidence report and present the actual alternatives. Keep the existing product scope unresolved until the user chooses an alternative or a private-backend research route.
+A local beta requires a truthful support matrix, usable cues/hotspots, reliable restoration, accessible controls, stable resources, and recovery instructions. [TEST_PLAN.md](TEST_PLAN.md) defines cases; [STABILITY_REPORT.md](STABILITY_REPORT.md) distinguishes passed, failed, unavailable, and pending work.
 
-## Phase 1: native shell
-
-- Retain the existing macOS app target and shared scheme; add a focused test target when full Xcode is available.
-- Implement a single shared AppStore and the explicit runtime state vocabulary.
-- Add Customize, Settings, and menu-bar commands with native controls.
-- Keep launch app-local only, with Restore/Quit available and explicit Resume after Restore.
-- Keep storage and cursor engine behind small boundaries.
-
-Accept when the app runs as a utility, window/menu state stays consistent, and no global permission is requested simply on launch.
-
-## Phase 2: pointer family and preview
-
-- Produce the editable arrow master and transparent scaled representations.
-- Add Ink, Tide, and Blush variants with a consistent hotspot.
-- Validate pack metadata and keep unknown/corrupt selections on safe defaults.
-- Add an AppKit preview region, Light/Dark test background, and three size presets.
-- Apply the proposed design tokens through one native semantic source.
-
-Accept when actual-size clicks land at the visible tip, borders look sharp on available backing scales, and entering/leaving the preview restores the normal pointer correctly.
-
-## Phase 3: selected engine and recovery
-
-- Implement only the backend selected by the feasibility decision.
-- Serialize start/update/stop and reject late callbacks from cancelled sessions.
-- Add accurate capability/status reporting and permission checks.
-- Handle screen changes, sleep/session deactivation, and backend failures.
-- Make preset updates transactional and restoration idempotent; expose incomplete restoration and retain ownership for recovery.
-- If a system replacement route needs a helper, document why and verify baseline capture/restoration before adding automatic reapplication.
-
-Accept when the user's chosen scope works in its declared contexts and recovery survives every required case. An invisible pointer, focus stealing, duplicate replacement arrow, or unusable text/resize cue is a release blocker.
-
-## Phase 4: polish the utility behavior
-
-- Persist style, size, and preview background without persisting runtime pause state or click count. Launch activates only the app-local preview.
-- Explain only required permissions at the moment of need and recheck on return.
-- Add concise local compatibility/error details and safe retry.
-- Complete keyboard navigation, VoiceOver descriptions, focus, and appearance handling.
-- Keep preference reset separate from Restore system pointer.
-
-Accept when first launch, denied access, revoked access, corrupted settings, restart, and incomplete restoration all produce useful and truthful UI. A recovery record must never turn into automatic enable-on-launch behavior.
-
-## Phase 5: beta readiness
-
-Run [TEST_PLAN.md](TEST_PLAN.md), capture native UI evidence in light/dark at the proposed minimum/default sizes, and fix material findings. Record performance measurements and the exact support matrix.
-
-Deliver a local build with build/run instructions, limitation notes, and recovery instructions. Configure external signing/notarization only when distribution is requested and credentials are available. Never mark other OS/hardware combinations supported merely because compilation targets them.
-
-## Suggested work chunks for the implementation model
-
-| Chunk | Reviewable deliverable |
-| --- | --- |
-| A | Phase 0 proof + evidence report |
-| B | Native shell + state/persistence boundaries |
-| C | Cursor assets + validation + actual-size preview |
-| D | Chosen backend + lifecycle/recovery checks |
-| E | Permission/settings UX + accessibility |
-| F | Support matrix + measured beta build |
-
-Estimate later phases after Chunk A. Private API maintenance, missing Xcode, unavailable test displays, and distribution setup can materially change the work; a full delivery-date promise before the engine proof would be unreliable.
-
-## Completion definition
-
-The first release is complete only when the chosen app-local scope, user controls, hotspot accuracy, runtime honesty, recovery, declared compatibility, and local build instructions all pass. The repair verification records the current evidence and untested cases; it does not establish global cursor replacement.
-
-Later roadmap: animation only after static correctness; pack import/editor after validation boundaries; per-app rules after a trustworthy application-context mechanism; launch at login after restart/recovery; distribution and updates after a dependable beta.
+Deferred: launch at login, per-app rules, artwork editing/export, cloud sync, updates.
