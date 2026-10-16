@@ -144,6 +144,24 @@ enum CursorPackChecks {
         try session.apply(result.snapshots, startWatchdog: false)
         try session.restore()
         try api.verifyAll(baseline)
+        // Switching to a pack without Busy must restore the old pack's Busy
+        // artwork rather than inherit it or choose an unrelated cursor.
+        let noBusy = CursorPackPlan(cursors: [cursors[0], cursors[2]])
+        let noBusyResult = try noBusy.replacements(using: api, size: 32)
+        precondition(!noBusyResult.snapshots.contains { CursorRole.busy.slotNames.contains($0.name) })
+        try session.apply(result.snapshots, startWatchdog: false)
+        try session.prepareForApplication()
+        try session.apply(noBusyResult.snapshots, startWatchdog: false)
+        let busyBaseline = baseline.filter { CursorRole.busy.slotNames.contains($0.name) }
+        try api.verifyAll(busyBaseline)
+        try session.restore()
+        try api.verifyAll(baseline)
+        var excludedBusy = cursors[3]
+        excludedBusy.roleOverride = "unassigned"
+        let excluded = try CursorPackPlan(cursors: [cursors[0], excludedBusy]).replacements(using: api, size: 32)
+        precondition(!excluded.snapshots.contains { CursorRole.busy.slotNames.contains($0.name) },
+                     "An explicitly unassigned Busy cursor must remain excluded")
+        print("Missing Busy checks passed: previous artwork restored, native baseline retained, manual exclusion honored.")
         api.failNextWriteFor = result.snapshots[result.snapshots.count / 2].name
         do {
             try session.apply(result.snapshots, startWatchdog: false)

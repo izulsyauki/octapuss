@@ -30,6 +30,12 @@ Run date: 16 October 2026. This is an experimental local candidate, not a declar
 | Displays/contexts | Unavailable or untested | Multiple/mixed-scale displays, unplug/replug, Mission Control, Stage Manager, protected surfaces, and exhaustive external roles |
 | Hotspots | Partial | Automated scaled geometry/click hit-testing passes; actual visible-tip precision Small/Large awaits user observation |
 
+### Loading-cursor follow-up
+
+The user reported that the manual results were better overall, with an unexpected cursor during loading when Busy is absent. This is not an itemized pass for each lifecycle/hotspot case. Investigation found no random-role selection: unassigned roles retain their captured baseline. All five currently imported sets contain Busy artwork; built-in presets customize only the arrow. The affected set and whether the unexpected artwork is the macOS beachball or another theme remain to be identified.
+
+A new fake-backend regression passed: apply a full pack, prepare the next transaction, then apply arrow plus Working without Busy. Busy returns to the original baseline, and final Restore recovers every baseline. Explicitly unassigning Busy also excludes that slot. These checks establish transition behavior; they do not reproduce an OS-controlled visible loading condition. Production fallback behavior has not been changed without a confirmed cause.
+
 ## Resource measurements
 
 Method: `scripts/measure-resources.py` samples only an explicitly selected Octapuss PID using cumulative process CPU time and RSS. Ten-second intervals, 11 samples each; percent is relative to one CPU core. CPU time has centisecond resolution (about 0.1 percentage point over these intervals), so displayed zero means no measurable CPU-time delta, not proof of absolutely no work. Helpers are not included in these parent-process samples. No pointer coordinates, input, screenshots, or unrelated process activity are recorded.
