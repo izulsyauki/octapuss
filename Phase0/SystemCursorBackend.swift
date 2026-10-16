@@ -180,6 +180,12 @@ final class SystemCursorAPI: SystemCursorAccess {
     }
 
     func write(_ snapshot: CursorSnapshot) throws {
+        try Self.write(snapshot, connection: connection(), register: register)
+    }
+
+    /// Keep the ABI boundary injectable so checks can observe registration flags
+    /// without changing a real system cursor.
+    static func write(_ snapshot: CursorSnapshot, connection: Int32, register: Register) throws {
         let images: [CGImage] = try snapshot.images.map {
             guard let image = NSBitmapImageRep(data: $0)?.cgImage else {
                 throw CursorSystemError.invalidBaseline
@@ -193,7 +199,10 @@ final class SystemCursorAPI: SystemCursorAccess {
         }
         var seed: Int32 = 0
         let result = snapshot.name.withCString {
-            register(connection(), $0, true, true,
+            // Register globally, but do not force this role onto the live pointer.
+            // Apply/Restore write many roles; displaying each one caused visible
+            // cycling through text, resize, busy, and baseline shapes.
+            register(connection, $0, true, false,
                      CGSize(width: snapshot.width, height: snapshot.height),
                      CGPoint(x: snapshot.x, y: snapshot.y), snapshot.frames,
                      snapshot.duration, images as CFArray, &seed)

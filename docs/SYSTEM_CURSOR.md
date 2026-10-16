@@ -29,6 +29,8 @@ Private API availability alone does not prove visible cross-app behavior, click 
 
 ## Implemented behavior
 
+Native registrations update global role artwork without instantly selecting each role on the live pointer. Earlier writes passed `instantly = true`, which could display resize, text, loading, and restored baseline shapes in sequence while applying/resuming a pack. The native-write boundary now uses `setGlobally = true, instantly = false` for application and recovery alike. ABI callback checks verify those flags and preserved metadata/error behavior; Anya's 53-slot Apply/Restore and owned-worker SIGKILL recovery passed after this change. See [the loading-cursor follow-up](STABILITY_REPORT.md#loading-cursor-follow-up) for the visual verification limit.
+
 - Explicit Apply system arrow registers the chosen style and size for Arrow and ArrowS. Selection changes remain a preview until Apply is pressed again.
 - Applied status retains the preset and size actually registered, independent of later preview selection. Recovery and pointer-color warnings take precedence in status. Nondefault macOS pointer outline/fill colors block Apply before registration; Settings provides Open System Settings and Reset Colors guidance.
 - Baselines for every affected slot are read before mutation and stored atomically under `~/Library/Application Support/Octapuss/system-arrow-session.json`.

@@ -145,7 +145,7 @@ struct CursorPackPlan {
         var unavailable: [String] = []
         var roles = Set<CursorRole>()
         var owners: [String: UUID] = [:]
-        // Apply the normal arrow last so a non-arrow registration doesn't remain displayed.
+        // Keep arrow aliases last; registration itself does not select a live role.
         for cursor in mapped.sorted(by: { ($0.effectiveRole == .arrow ? 1 : 0) < ($1.effectiveRole == .arrow ? 1 : 0) }) {
             let names = cursor.targetSlotNames.filter { available.contains($0) }
             if names.isEmpty { unavailable.append(cursor.effectiveRole!.title); continue }

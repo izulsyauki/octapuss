@@ -8,7 +8,7 @@ Run date: 16 October 2026. This is an experimental local candidate, not a declar
 - Command Line Tools builder uses the installed macOS 15.4 SDK workaround. Deployment target 14.0 is not a compatibility certification.
 - Xcode project and both bundle property lists pass `plutil -lint`. Local `xcodebuild` cannot run because full Xcode is absent. No XCTest target exists.
 - A read-only hosted macOS workflow was added to validate Release with Xcode and run synthetic checks. [Run 38864881747](https://github.com/izulsyauki/octapuss/actions/runs/38864881747) did not start any build steps: GitHub's check annotation says, "The job was not started because your account is locked due to a billing issue." No hosted compilation result is claimed. The repository owner must resolve that account restriction before rerunning; no billing settings were changed.
-- Current locally ad-hoc signed candidate: `.build/candidate/Octapuss.app`, built from source commit `2c19ed0`. Deep/strict signature and packaged-helper verification passed. `.build/stability/Octapuss.app` was used for the interactive/resource checks of the same timer fix before the final observer-ownership refinement.
+- Initial locally ad-hoc signed candidate: `.build/candidate/Octapuss.app`, built from source commit `2c19ed0`. Deep/strict signature and packaged-helper verification passed. `.build/stability/Octapuss.app` was used for the interactive/resource checks of the same timer fix before the final observer-ownership refinement. The latest loading-cursor repair is `.build/quiet-registration/Octapuss.app`, also deep/strict signature verified; it supersedes the initial candidate in the packaged ZIP.
 - No Developer ID Application identity is available in the local signing query. Developer ID signing, hardened-runtime validation, notarization, stapling, and clean-machine Gatekeeper verification remain unavailable/pending. No credentials were requested or security settings changed.
 
 ## Checks
@@ -35,6 +35,12 @@ Run date: 16 October 2026. This is an experimental local candidate, not a declar
 The user reported that the manual results were better overall, with an unexpected cursor during loading when Busy is absent. This is not an itemized pass for each lifecycle/hotspot case. Investigation found no random-role selection: unassigned roles retain their captured baseline. All five currently imported sets contain Busy artwork; built-in presets customize only the arrow. The affected set and whether the unexpected artwork is the macOS beachball or another theme remain to be identified.
 
 A new fake-backend regression passed: apply a full pack, prepare the next transaction, then apply arrow plus Working without Busy. Busy returns to the original baseline, and final Restore recovers every baseline. Explicitly unassigning Busy also excludes that slot. These checks establish transition behavior; they do not reproduce an OS-controlled visible loading condition. Production fallback behavior has not been changed without a confirmed cause.
+
+The user subsequently identified **Anya** and described resize, text, loading, and baseline macOS shapes appearing before application completed. Anya includes an explicit Busy entry, so the missing-role hypothesis does not explain that case. Inspection found that every native registration used `setGlobally = true, instantly = true`. The [primary ABI declaration](https://raw.githubusercontent.com/alexzielenski/Mousecape/master/Mousecape/mousecloak/CGSInternal/CGSCursor.h) distinguishes these flags. Forcing every registered role onto the live pointer during both baseline restoration and pack application is a credible mechanism for the reported cycling.
+
+Registration now keeps global application enabled and sets `instantly = false`. The same boundary is used by Apply, Restore, resume, rollback, and watchdog recovery; it no longer explicitly displays every intermediate role. macOS remains responsible for selecting the appropriate semantic cursor. A test callback at the actual native-write boundary verifies both flags, image/frame/geometry metadata, and error propagation without real cursor writes.
+
+The Anya fixture and complete safe suite passed. A new live Anya check passed **53-slot Apply/Restore and SIGKILL watchdog recovery**, including baseline pixels, sizes, hotspots, and journal cleanup. The signed repaired build at `.build/quiet-registration/Octapuss.app` was opened and Anya reapplied at Medium; the UI reported **12 roles across 53 slots**. Human confirmation of disappearance of the visible cycling is pending. This change fixes forced intermediate displays; it does not claim universal replacement of app-drawn/protected cursors or every OS loading condition.
 
 ## Resource measurements
 
@@ -63,7 +69,7 @@ Native recovery check, only with the app's current pack restored and no competin
 
 ## Local candidate
 
-`rtk proxy zsh scripts/package-local-candidate.sh "$PWD/.build/candidate/Octapuss.app"` produces `.build/local-candidate/Octapuss-0.1.0-local-arm64.zip` with a SHA-256 file, source revision, validation report, and recovery instructions alongside it. Imported artwork is not bundled. The package is experimental, locally signed, and not notarized; its existence does not close the acceptance gates below.
+`rtk proxy zsh scripts/package-local-candidate.sh "$PWD/.build/quiet-registration/Octapuss.app"` produces `.build/local-candidate/Octapuss-0.1.0-local-arm64.zip` with a SHA-256 file, source revision, validation report, and recovery instructions alongside it. Imported artwork is not bundled. The package is experimental, locally signed, and not notarized; its existence does not close the acceptance gates below.
 
 ## Remaining acceptance gates
 

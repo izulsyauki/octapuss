@@ -32,6 +32,24 @@ enum CursorPackChecks {
         precondition(decoded.png == first.png, "ANI sequence must determine the first frame")
         let sprite = try decoded.snapshot(name: "busy", longestSide: 32)
         precondition(sprite.frames == 2 && abs(sprite.duration - 0.15) < 0.000001)
+        RegistrationProbe.calls = []
+        try SystemCursorAPI.write(sprite, connection: 123, register: RegistrationProbe.register)
+        precondition(RegistrationProbe.calls.count == 1)
+        let registration = RegistrationProbe.calls[0]
+        precondition(registration.connection == 123 && registration.name == sprite.name)
+        precondition(registration.globally && !registration.instantly,
+                     "Registering a role must not display it over the current semantic cursor")
+        precondition(registration.frames == sprite.frames && registration.imageCount == sprite.images.count)
+        precondition(registration.size == CGSize(width: sprite.width, height: sprite.height))
+        precondition(registration.hotspot == CGPoint(x: sprite.x, y: sprite.y))
+        precondition(registration.duration == sprite.duration)
+        RegistrationProbe.result = -1
+        do {
+            try SystemCursorAPI.write(sprite, connection: 123, register: RegistrationProbe.register)
+            preconditionFailure("Native registration errors must still propagate")
+        } catch CursorSystemError.call(_, let code) { precondition(code == -1) }
+        RegistrationProbe.result = 0
+        print("Native registration checks passed: global role updates without forced display; metadata and errors preserved.")
         let bitmap = NSBitmapImageRep(data: sprite.images[0])!
         precondition(bitmap.pixelsWide == 32 && bitmap.pixelsHigh == 64)
         precondition(bitmap.colorAt(x: 16, y: 16)!.usingColorSpace(.deviceRGB)!.blueComponent > 0.99,
@@ -230,5 +248,28 @@ enum CursorPackChecks {
             print("Son Goku checks passed: 15 files, 13 system roles, \(result.snapshots.count) slots; manual assignment, exclusion, relaunch, and reimport.")
         }
         print("Pack checks passed: role matching, duplicate blocking, ANI order/rates/strips, role overrides, all-slot rollback and restoration.")
+    }
+}
+
+private enum RegistrationProbe {
+    struct Call {
+        let connection: Int32
+        let name: String
+        let globally: Bool
+        let instantly: Bool
+        let size: CGSize
+        let hotspot: CGPoint
+        let frames: Int
+        let duration: Double
+        let imageCount: Int
+    }
+    static var calls: [Call] = []
+    static var result: Int32 = 0
+    static let register: SystemCursorAPI.Register = { connection, name, globally, instantly, size, hotspot, frames, duration, images, seed in
+        calls.append(Call(connection: connection, name: String(cString: name), globally: globally,
+                          instantly: instantly, size: size, hotspot: hotspot, frames: frames,
+                          duration: duration, imageCount: CFArrayGetCount(images)))
+        seed.pointee = 1
+        return result
     }
 }
