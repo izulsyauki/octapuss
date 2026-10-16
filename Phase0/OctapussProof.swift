@@ -744,8 +744,7 @@ final class CursorPreviewNSView: NSView {
             }
             previewCursor = enabled ? (imported?.cursor(longestSide: size.points) ?? PointerArtwork.cursor(pack: pack, size: size.points)) : .arrow
             window?.invalidateCursorRects(for: self)
-            if let window, window.isKeyWindow,
-               visibleRect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
+            if pointerIsInsidePreview {
                 previewCursor.set()
             }
             startAnimationIfNeeded()
@@ -785,6 +784,12 @@ final class CursorPreviewNSView: NSView {
     override func viewDidHide() {
         super.viewDidHide()
         stopAnimation()
+        releasePreviewCursor(in: window)
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow !== window { releasePreviewCursor(in: window) }
+        super.viewWillMove(toWindow: newWindow)
     }
 
     override func viewDidUnhide() {
@@ -826,7 +831,8 @@ final class CursorPreviewNSView: NSView {
         previewCursor = animationCursors[index]
         portrait = animationPortraits[index]
         needsDisplay = true
-        if visibleRect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) { previewCursor.set() }
+        window.invalidateCursorRects(for: self)
+        if pointerIsInsidePreview { previewCursor.set() }
     }
 
     @objc private func boop() { onClick?() }
@@ -837,15 +843,15 @@ final class CursorPreviewNSView: NSView {
     }
 
     override func resetCursorRects() {
-        addCursorRect(visibleRect, cursor: previewCursor)
+        addCursorRect(previewCursorRect, cursor: previewCursor)
     }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let cursorTrackingArea { removeTrackingArea(cursorTrackingArea) }
         let area = NSTrackingArea(
-            rect: .zero,
-            options: [.cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+            rect: previewCursorRect,
+            options: [.cursorUpdate, .mouseEnteredAndExited, .activeInKeyWindow],
             owner: self,
             userInfo: nil
         )
@@ -853,7 +859,32 @@ final class CursorPreviewNSView: NSView {
         cursorTrackingArea = area
     }
 
-    override func cursorUpdate(with event: NSEvent) { previewCursor.set() }
+    private var previewCursorRect: NSRect { bounds.intersection(visibleRect) }
+
+    private var pointerIsInsidePreview: Bool {
+        guard let window, window.isKeyWindow, window.isVisible,
+              !isHiddenOrHasHiddenAncestor else { return false }
+        return previewCursorRect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil))
+    }
+
+    private func releasePreviewCursor(in window: NSWindow?) {
+        // Only replace artwork owned by this preview, while still in this window.
+        // Another app or a text field may already have selected its own cursor.
+        guard let window, window.isKeyWindow, window.isVisible,
+              let content = window.contentView,
+              content.bounds.contains(content.convert(window.mouseLocationOutsideOfEventStream, from: nil)),
+              NSCursor.current === previewCursor || animationCursors.contains(where: { $0 === NSCursor.current }) else { return }
+        NSCursor.arrow.set()
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if pointerIsInsidePreview { previewCursor.set() }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        releasePreviewCursor(in: window)
+        super.mouseExited(with: event)
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         let background = darkPreview ? AppPalette.previewDark : AppPalette.previewLight

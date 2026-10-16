@@ -68,6 +68,7 @@ struct RegressionChecks {
         precondition(store.clickCount == 0 && !store.previewEnabled, "Reset must preserve paused state")
         precondition(store.prepareToQuit() && !store.previewEnabled)
         checkPreviewAnimationLifecycle()
+        checkPreviewCursorBoundary()
         view.onClick = nil
         checkSystemTransactions()
         do { try CursorImportChecks.run() }
@@ -163,6 +164,55 @@ struct RegressionChecks {
             try api.base.verifyAll(baseline)
             print("Apply busy checks passed: artwork, main-actor responsiveness, duplicate guard, cancel, error, Quit, lock interruption, and no late activation.")
         } catch { preconditionFailure(error.localizedDescription) }
+    }
+
+    @MainActor
+    static func checkPreviewCursorBoundary() {
+        let window = AnimationCheckWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
+                                          styleMask: [.titled], backing: .buffered, defer: false)
+        let view = CursorPreviewNSView(frame: NSRect(x: 0, y: 0, width: 300, height: 225))
+        window.contentView!.addSubview(view)
+        window.testMouseLocation = view.convert(NSPoint(x: 40, y: 40), to: nil)
+        let event = NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: window.windowNumber, context: nil, subtype: 0, data1: 0, data2: 0)!
+        defer { NSCursor.arrow.set() }
+        view.configure(pack: .blush, size: .medium, dark: false, enabled: true, clicks: 0)
+        view.updateTrackingAreas()
+        precondition(view.trackingAreas.contains { $0.options.contains(.mouseEnteredAndExited) })
+        precondition(view.trackingAreas.allSatisfy { view.bounds.contains($0.rect) && !$0.options.contains(.inVisibleRect) },
+                     "Cursor tracking must not expand beyond the playground bounds")
+        view.cursorUpdate(with: event)
+        let preview = NSCursor.current
+        precondition(preview !== NSCursor.arrow)
+        window.testMouseLocation = NSPoint(x: 500, y: 40)
+        view.mouseExited(with: event)
+        precondition(NSCursor.current === NSCursor.arrow, "Leaving the playground must release its cursor")
+        view.cursorUpdate(with: event)
+        view.configure(pack: .tide, size: .large, dark: false, enabled: true, clicks: 0)
+        precondition(NSCursor.current === NSCursor.arrow, "Late updates must not reclaim the sidebar cursor")
+        NSCursor.iBeam.set()
+        view.mouseExited(with: event)
+        precondition(NSCursor.current === NSCursor.iBeam, "Exit must preserve another control's cursor")
+        window.testMouseLocation = view.convert(NSPoint(x: 40, y: 40), to: nil)
+        view.cursorUpdate(with: event)
+        view.isHidden = true
+        precondition(NSCursor.current === NSCursor.arrow, "Hiding the playground must release its cursor")
+        view.isHidden = false
+        view.cursorUpdate(with: event)
+        view.removeFromSuperview()
+        precondition(NSCursor.current === NSCursor.arrow, "Removing the playground must release its cursor")
+        window.contentView!.addSubview(view)
+        view.cursorUpdate(with: event)
+        let owned = NSCursor.current
+        window.testMouseLocation = NSPoint(x: -100, y: -100)
+        view.mouseExited(with: event)
+        precondition(NSCursor.current === owned, "Exit must not force a cursor into another app")
+        window.testMouseLocation = view.convert(NSPoint(x: 40, y: 40), to: nil)
+        window.testKey = false
+        NSCursor.iBeam.set()
+        view.cursorUpdate(with: event)
+        precondition(NSCursor.current === NSCursor.iBeam, "An inactive preview cannot claim the cursor")
+        print("Preview boundary checks passed: exit, late updates, text cursor, hide, detach, outside-window and inactive ownership.")
     }
 
     @MainActor
@@ -345,6 +395,8 @@ struct RegressionChecks {
 final class AnimationCheckWindow: NSWindow {
     var testKey = true
     var testVisible = true
+    var testMouseLocation = NSPoint(x: -100, y: -100)
+    override var mouseLocationOutsideOfEventStream: NSPoint { testMouseLocation }
     override var isKeyWindow: Bool { testKey }
     override var isVisible: Bool { testVisible }
     override var occlusionState: NSWindow.OcclusionState { testVisible ? [.visible] : [] }

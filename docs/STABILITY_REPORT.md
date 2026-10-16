@@ -53,6 +53,16 @@ The safe suite passed with Anya and Son Goku, including injected registration ba
 
 Immediate native screenshots captured **Applying Anya…**, the static Busy artwork, an indeterminate indicator, disabled editing/Apply, and **Cancel and restore**. A real ⌘⇧R during Apply ended at **Cursor change cancelled. System pointer restored.** with preview paused. Anya was then reapplied at the user's Small size, ending with **12 roles across 53 system slots**. Actual menu-bar Quit during an in-flight Apply and physical sleep during Apply remain untested; fake state checks do not replace those observations.
 
+### Playground cursor boundary
+
+The user reported that the selected preview artwork remained over Octapuss's sidebar and buttons after leaving the playground. A native regression fixture reproduced a visible region larger than the view's bounds: `visibleRect` extended to 600 points wide for a 300-point-wide playground. Both cursor rectangles and direct cursor updates previously used that region without intersecting the actual bounds. The tracking area also used `.inVisibleRect`, and no exit handler released directly selected preview artwork.
+
+Cursor registration, tracking and direct updates now use the intersection of the visible region and playground bounds. Exit, hide and detach release only the preview's current artwork while the pointer remains inside the same active window; another control's text cursor or an external app's cursor is preserved. Animation updates use the same bounded ownership check.
+
+Native regression checks passed for leaving the playground, delayed updates outside it, preserving a text cursor, hiding/removing the view, inactive windows and outside-window ownership. The existing animation lifecycle and full safe suite also passed with the Anya and Son Goku fixtures. These controlled native tests do not establish a physical pointer traversal through the live window; that visual check remains untested by automation.
+
+The repaired local build passed helper packaging and strict signature verification. The previous app's system pointer was restored before stopping its process. The UI automation launch timed out repeatedly, so reopening the repaired app and reapplying Anya could not be confirmed in this run.
+
 ## Resource measurements
 
 Method: `scripts/measure-resources.py` samples only an explicitly selected Octapuss PID using cumulative process CPU time and RSS. Ten-second intervals, 11 samples each; percent is relative to one CPU core. CPU time has centisecond resolution (about 0.1 percentage point over these intervals), so displayed zero means no measurable CPU-time delta, not proof of absolutely no work. Helpers are not included in these parent-process samples. No pointer coordinates, input, screenshots, or unrelated process activity are recorded.
@@ -80,7 +90,7 @@ Native recovery check, only with the app's current pack restored and no competin
 
 ## Local candidate
 
-`rtk proxy zsh scripts/package-local-candidate.sh "$PWD/.build/apply-progress/Octapuss.app"` produces `.build/local-candidate/Octapuss-0.1.0-local-arm64.zip` with a SHA-256 file, source revision, validation report, and recovery instructions alongside it. Imported artwork is not bundled. The package is experimental, locally signed, and not notarized; its existence does not close the acceptance gates below.
+`rtk proxy zsh scripts/package-local-candidate.sh "$PWD/.build/preview-boundary/Octapuss.app"` produces `.build/local-candidate/Octapuss-0.1.0-local-arm64.zip` with a SHA-256 file, source revision, validation report, and recovery instructions alongside it. Imported artwork is not bundled. The package is experimental, locally signed, and not notarized; its existence does not close the acceptance gates below.
 
 ## Remaining acceptance gates
 
