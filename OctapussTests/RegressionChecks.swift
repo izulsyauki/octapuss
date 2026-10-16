@@ -6,7 +6,7 @@ import SwiftUI
 @main
 struct RegressionChecks {
     @MainActor
-    static func main() {
+    static func main() async {
         _ = NSApplication.shared
         let suite = "dev.octapuss.regression.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -74,8 +74,95 @@ struct RegressionChecks {
         catch { preconditionFailure(error.localizedDescription) }
         do { try CursorPackChecks.run() }
         catch { preconditionFailure(error.localizedDescription) }
+        await checkApplyBusyLifecycle()
         checkMenuBarLifecycle(store: store)
         print("Regression checks completed: preferences, 9 cursor variants, 3 layout sizes, 20 clicks, repeated Restore, reset, and quit.")
+    }
+
+    @MainActor
+    static func checkApplyBusyLifecycle() async {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("octapuss-busy-\(UUID())")
+        let suite = "octapuss-busy-\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: root) }
+        do {
+            let image = PointerArtwork.pointerImage(pack: .ink, size: 32)
+            let png = NSBitmapImageRep(cgImage: image.cgImage(forProposedRect: nil, context: nil, hints: nil)!)
+                .representation(using: .png, properties: [:])!
+            let setID = UUID()
+            let arrow = ImportedCursor(id: UUID(), name: "Normal", png: png, width: 32, height: 32,
+                hotspotX: 2, hotspotY: 2, firstFrameOnly: false, collectionID: setID, collectionName: "Busy test",
+                roleOverride: CursorRole.arrow.rawValue)
+            var busy = arrow
+            busy.id = UUID()
+            busy.roleOverride = CursorRole.busy.rawValue
+            busy.animation = CursorAnimation(frames: [png, png], durations: [0.1, 0.1])
+            let libraryURL = root.appendingPathComponent("library.json")
+            try CursorLibrary(url: libraryURL).save([arrow, busy])
+            defaults.set(arrow.id.uuidString, forKey: "selectedImportedCursor")
+            let names = CursorRole.arrow.slotNames + CursorRole.busy.slotNames
+            let baseline = try names.map { try arrow.snapshot(name: $0, longestSide: 24) }
+            let api = BlockingCursorAPI(snapshots: baseline)
+            let journal = root.appendingPathComponent("session.json")
+            let store = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL,
+                                   systemAccess: api, systemJournalURL: journal)
+            func waitFor(_ condition: () -> Bool) async {
+                let deadline = Date().addingTimeInterval(8)
+                while Date() < deadline {
+                    if condition() { return }
+                    try? await Task.sleep(nanoseconds: 10_000_000)
+                }
+                preconditionFailure("Async cursor operation timed out")
+            }
+            store.applySystemArrow()
+            precondition(store.isApplying && store.applyingCursor?.id == busy.id)
+            precondition(store.statusTitle == "Applying Busy test…")
+            await waitFor { api.entered.wait(timeout: .now()) == .success }
+            // Main-actor continuations still execute while native registration is blocked.
+            precondition(store.isApplying && !store.systemApplied)
+            store.applySystemArrow() // Duplicate input must not queue another operation.
+            api.proceed.signal()
+            await waitFor { !store.isApplying }
+            precondition(store.systemApplied && store.applyingCursor == nil)
+
+            api.blockNextWrite = true
+            store.applySystemArrow()
+            await waitFor { api.entered.wait(timeout: .now()) == .success }
+            store.restore()
+            precondition(store.isApplying && store.statusTitle == "Restoring pointer…")
+            api.proceed.signal()
+            await waitFor { !store.isApplying }
+            precondition(!store.systemApplied && !store.previewEnabled && !store.systemNeedsRecovery)
+            precondition(!FileManager.default.fileExists(atPath: journal.path))
+            try api.base.verifyAll(baseline)
+
+            api.base.failNextWriteFor = names[0]
+            store.applySystemArrow()
+            await waitFor { !store.isApplying }
+            precondition(!store.systemApplied && !store.systemNeedsRecovery && store.applyingCursor == nil)
+            try api.base.verifyAll(baseline)
+
+            api.blockNextWrite = true
+            store.applySystemArrow()
+            await waitFor { api.entered.wait(timeout: .now()) == .success }
+            precondition(!store.prepareToQuit(), "Quit must wait for in-flight Apply cleanup")
+            api.proceed.signal()
+            await waitFor { !store.isApplying }
+            precondition(store.prepareToQuit() && !store.systemApplied)
+            try api.base.verifyAll(baseline)
+            api.blockNextWrite = true
+            store.applySystemArrow()
+            await waitFor { api.entered.wait(timeout: .now()) == .success }
+            store.suspendSystemCursor(for: .lock)
+            store.resumeSystemCursor(after: .lock)
+            api.proceed.signal()
+            await waitFor { !store.isApplying }
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            precondition(!store.systemApplied && !FileManager.default.fileExists(atPath: journal.path),
+                         "An interrupted Apply must not reactivate after unlock")
+            try api.base.verifyAll(baseline)
+            print("Apply busy checks passed: artwork, main-actor responsiveness, duplicate guard, cancel, error, Quit, lock interruption, and no late activation.")
+        } catch { preconditionFailure(error.localizedDescription) }
     }
 
     @MainActor
@@ -261,6 +348,25 @@ final class AnimationCheckWindow: NSWindow {
     override var isKeyWindow: Bool { testKey }
     override var isVisible: Bool { testVisible }
     override var occlusionState: NSWindow.OcclusionState { testVisible ? [.visible] : [] }
+}
+
+final class BlockingCursorAPI: SystemCursorAccess {
+    let base: FakeSystemCursorAPI
+    let entered = DispatchSemaphore(value: 0)
+    let proceed = DispatchSemaphore(value: 0)
+    var blockNextWrite = true
+    init(snapshots: [CursorSnapshot]) { base = FakeSystemCursorAPI(snapshots: snapshots) }
+    func read(_ name: String) throws -> CursorSnapshot { try base.read(name) }
+    func write(_ snapshot: CursorSnapshot) throws {
+        if blockNextWrite {
+            blockNextWrite = false
+            entered.signal()
+            guard proceed.wait(timeout: .now() + 8) == .success else {
+                throw CursorSystemError.call("Test registration barrier", -1)
+            }
+        }
+        try base.write(snapshot)
+    }
 }
 
 final class FakeSystemCursorAPI: SystemCursorAccess {

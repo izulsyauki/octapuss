@@ -53,21 +53,32 @@ struct SystemCursorLiveCheck {
             if worker.isRunning { worker.terminate(); worker.waitUntilExit() }
         }
         let ready = url.appendingPathExtension("worker-ready")
-        for _ in 0..<250 {
+        let workerStartedAt = Date()
+        let workerDeadline = workerStartedAt.addingTimeInterval(20)
+        // This includes decoding and registering a whole animated pack, not
+        // just helper startup. Five seconds was too short on a loaded host.
+        while Date() < workerDeadline {
             if FileManager.default.fileExists(atPath: ready.path) { break }
-            guard worker.isRunning else { throw CursorSystemError.watchdogUnavailable }
+            guard worker.isRunning else {
+                throw CursorSystemError.call("Integration worker exited before Apply completed", worker.terminationStatus)
+            }
             Thread.sleep(forTimeInterval: 0.02)
         }
-        guard FileManager.default.fileExists(atPath: ready.path) else { throw CursorSystemError.watchdogUnavailable }
+        guard FileManager.default.fileExists(atPath: ready.path) else {
+            throw CursorSystemError.call("Integration worker Apply readiness timed out after 20 seconds", -1)
+        }
+        print("Integration worker ready after \(String(format: "%.2f", Date().timeIntervalSince(workerStartedAt))) seconds.")
         guard kill(worker.processIdentifier, SIGKILL) == 0 else { throw CursorSystemError.watchdogUnavailable }
         worker.waitUntilExit()
-        for _ in 0..<250 {
+        let recoveryStartedAt = Date()
+        let recoveryDeadline = recoveryStartedAt.addingTimeInterval(20)
+        while Date() < recoveryDeadline {
             if !session.hasPendingRecovery { break }
             Thread.sleep(forTimeInterval: 0.02)
         }
         guard !session.hasPendingRecovery else { throw CursorSystemError.pendingRecovery }
         try api.verifyAll(baseline)
-        print("SIGKILL recovery: watchdog restored all \(theme.count) slots and removed the journal.")
+        print("SIGKILL recovery: watchdog restored all \(theme.count) slots and removed the journal in \(String(format: "%.2f", Date().timeIntervalSince(recoveryStartedAt))) seconds.")
     }
 
 

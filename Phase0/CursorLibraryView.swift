@@ -26,8 +26,10 @@ struct CursorLibraryView: View {
             HStack(spacing: 0) {
                 sidebar
                     .frame(width: 232)
+                    .disabled(store.isApplying)
                 Divider()
                 workbench
+                    .disabled(store.isApplying)
             }
             Divider()
             actionBar
@@ -271,19 +273,25 @@ struct CursorLibraryView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 14) {
                 HStack(spacing: 7) {
-                    Image(systemName: store.systemNeedsRecovery ? "exclamationmark.triangle" : "cursorarrow.rays")
-                        .foregroundStyle(store.systemNeedsRecovery ? Color.primary : Color(nsColor: AppPalette.tide))
+                    if store.isApplying {
+                        ApplyBusyArtwork(cursor: store.applyingCursor)
+                        ProgressView().controlSize(.small).accessibilityLabel(store.statusTitle)
+                    } else {
+                        Image(systemName: store.systemNeedsRecovery ? "exclamationmark.triangle" : "cursorarrow.rays")
+                            .foregroundStyle(store.systemNeedsRecovery ? Color.primary : Color(nsColor: AppPalette.tide))
+                    }
                     Text(store.statusTitle).font(.system(size: 11, weight: .medium))
                         .lineLimit(1).truncationMode(.middle).help(store.statusTitle)
                 }
                 Spacer(minLength: 12)
-                if !store.previewEnabled {
+                if !store.previewEnabled && !store.isApplying {
                     Button("Resume preview") { store.resumePreview() }
                 }
-                Button("Restore system pointer") { store.restore() }
+                Button(store.isApplying ? "Cancel and restore" : "Restore system pointer") { store.restore() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button(store.applyActionTitle) { store.applySystemArrow() }
                     .buttonStyle(.borderedProminent)
+                    .disabled(store.isApplying)
             }
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(store.diagnostic).font(.system(size: 11)).foregroundStyle(Color(nsColor: AppPalette.secondaryText))
@@ -310,6 +318,45 @@ struct CursorLibraryView: View {
     private func requestDeletion(of collection: CursorCollection) {
         packToDelete = collection
         showingDeleteConfirmation = true
+    }
+}
+
+/// Pack artwork is app-local feedback; it never forces a global cursor role.
+private struct ApplyBusyArtwork: View {
+    let cursor: ImportedCursor?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        if let cursor {
+            let images = (cursor.animation?.frames ?? [cursor.png]).compactMap { NSImage(data: $0) }
+            let durations = cursor.animation?.durations ?? [1]
+            Group {
+                if images.count > 1 {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || scenePhase != .active)) { context in
+                        let total = durations.reduce(0, +)
+                        let time = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: total)
+                        let index = reduceMotion ? 0 : frameIndex(time: time, durations: durations)
+                        artwork(images[min(index, images.count - 1)])
+                    }
+                } else if let image = images.first { artwork(image) }
+            }
+            .frame(width: 28, height: 28)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private func artwork(_ image: NSImage) -> some View {
+        Image(nsImage: image).resizable().interpolation(.none).scaledToFit()
+    }
+
+    private func frameIndex(time: Double, durations: [Double]) -> Int {
+        var end = 0.0
+        for (index, duration) in durations.enumerated() {
+            end += duration
+            if time < end { return index }
+        }
+        return 0
     }
 }
 

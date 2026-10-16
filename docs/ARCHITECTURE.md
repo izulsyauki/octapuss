@@ -30,6 +30,8 @@ flowchart TD
 
 Selection is separate from the pack actually applied. SystemCursorSession serializes writes with a file lock and atomically saves every affected baseline first. A generation UUID prevents an old watchdog reverting a newer session. Restore verifies ownership, preserves external changes, and retains failed recovery ownership. Explicit Apply can archive an externally superseded journal without overwriting another utility's artwork.
 
+Apply preparation runs away from the UI thread, and session instance operations share a private serial queue. The main actor publishes loading artwork/status and handles cancellation; it cannot mark a cancelled operation applied after its worker returns. Deferred Quit waits for restoration. See [Apply feedback and cancellation](APPLY_PROGRESS.md).
+
 The bundled OctapussCursorHelper.app has its own identifier and background-only policy. Short-lived readers avoid stale native API caches; a temporary pipe-watching helper restores an owned journal after a parent crash. It is neither privileged nor installed at login. Packaging is shared by the Command Line Tools builder and Xcode target.
 
 ## Lifecycle

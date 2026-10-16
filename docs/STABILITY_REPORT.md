@@ -8,7 +8,7 @@ Run date: 16 October 2026. This is an experimental local candidate, not a declar
 - Command Line Tools builder uses the installed macOS 15.4 SDK workaround. Deployment target 14.0 is not a compatibility certification.
 - Xcode project and both bundle property lists pass `plutil -lint`. Local `xcodebuild` cannot run because full Xcode is absent. No XCTest target exists.
 - A read-only hosted macOS workflow was added to validate Release with Xcode and run synthetic checks. [Run 38864881747](https://github.com/izulsyauki/octapuss/actions/runs/38864881747) did not start any build steps: GitHub's check annotation says, "The job was not started because your account is locked due to a billing issue." No hosted compilation result is claimed. The repository owner must resolve that account restriction before rerunning; no billing settings were changed.
-- Initial locally ad-hoc signed candidate: `.build/candidate/Octapuss.app`, built from source commit `2c19ed0`. Deep/strict signature and packaged-helper verification passed. `.build/stability/Octapuss.app` was used for the interactive/resource checks of the same timer fix before the final observer-ownership refinement. The latest loading-cursor repair is `.build/quiet-registration/Octapuss.app`, also deep/strict signature verified; it supersedes the initial candidate in the packaged ZIP.
+- Initial locally ad-hoc signed candidate: `.build/candidate/Octapuss.app`, built from source commit `2c19ed0`. Deep/strict signature and packaged-helper verification passed. `.build/stability/Octapuss.app` was used for the initial interactive/resource checks. The subsequent `.build/quiet-registration/Octapuss.app` fixed forced role cycling. The latest candidate is `.build/apply-progress/Octapuss.app`, with responsive Apply feedback and a verified deep/strict signature; it supersedes earlier builds in the packaged ZIP.
 - No Developer ID Application identity is available in the local signing query. Developer ID signing, hardened-runtime validation, notarization, stapling, and clean-machine Gatekeeper verification remain unavailable/pending. No credentials were requested or security settings changed.
 
 ## Checks
@@ -18,10 +18,11 @@ Run date: 16 October 2026. This is an experimental local candidate, not a declar
 | Preferences/import/roles/deletion | Pass | Executable regression suite with Anya, Minecraft, and Son Goku fixtures; original downloads preserved |
 | Transactions and ownership | Pass | Rollback, conflicts, stale generation, repeated restoration, journal retention/cleanup |
 | Repetition | Pass in fake backend | 100 Apply/Restore cycles, baseline and journal checked each cycle; final all-fixture run 0.57 seconds; not a 100-cycle native leak test |
-| Native full-pack recovery | Pass, existing matching engine evidence | 56-slot normal restoration and owned-worker SIGKILL recovery previously passed. A Git comparison verified backend, role planner and decoder unchanged since tested commit `b8fb857`; no competing live test was run during the user's physical lifecycle check |
+| Native full-pack recovery | Pass on host | Current serialized session passed Anya's 53-slot normal restoration and owned-worker SIGKILL recovery. Earlier Minecraft/Goku checks passed 56 slots; no broader OS/hardware claim |
 | Helper packaging | Pass | Background-only policy, zero windows, invalid arguments, registry read, watchdog ready/EOF exit |
 | Background/reopen/window close | Pass for app command | Same process becomes `UIElement`; pack retained on reopen; closing main window left the process and 53-slot journal alive; direct Dock/status-menu actions await human verification |
 | Animation power behavior | Fixed and passed | Previously a repeating timer woke while inactive; now stops for inactive/hidden/occluded windows, Restore and detach, resumes when eligible, and observes accessibility display changes on the main run loop |
+| Apply busy feedback | Pass | Real app displayed Anya Busy artwork, progress, Applying label, disabled Apply and Cancel and Restore; keyboard Restore cancelled Apply and returned to paused system-pointer status; final Anya application reported 12 roles / 53 slots |
 | Fullscreen | Partial pass | Native fullscreen entry and View → Exit Full Screen worked; gallery, action bar, selection, and Anya applied status survived. Human cursor appearance across Spaces/other fullscreen apps remains untested |
 | UI sizes/appearance | Partial pass | 12 offscreen fixtures generated at 1080×760 and 900×640, light/dark, built-in/imported/deleted states; representative captures inspected. Native sample artwork unavailable in offscreen runner but visibly present in the actual app |
 | Keyboard/accessibility | Partial pass | Tab focused labeled search; typing filtered sets; Settings opened/closed with consistent applied status; AX exposes role picker, selected cursors, Apply/Restore and named controls. Full traversal with Keyboard Navigation enabled and actual VoiceOver speech/order remain untested |
@@ -42,7 +43,15 @@ Registration now keeps global application enabled and sets `instantly = false`. 
 
 The Anya fixture and complete safe suite passed. A new live Anya check passed **53-slot Apply/Restore and SIGKILL watchdog recovery**, including baseline pixels, sizes, hotspots, and journal cleanup. The signed repaired build at `.build/quiet-registration/Octapuss.app` was opened and Anya reapplied at Medium; the UI reported **12 roles across 53 slots**. The user confirmed that the unrelated-shape cycling stopped. This change fixes forced intermediate displays; it does not claim universal replacement of app-drawn/protected cursors or every OS loading condition.
 
-The user then asked why Busy no longer appears while changing a pack. Anya's original Wait entry is one static frame; its Working entry has 15 frames at 100 ms. Pack application no longer forces the Busy role just to display its artwork. Whether the follow-up requests in-app Apply progress or reports missing artwork during a genuine OS waiting condition is being clarified; no missing Busy mapping has been demonstrated.
+The user then asked why Busy no longer appears while changing a pack. Anya's original Wait entry is one static frame; its Working entry has 15 frames at 100 ms. Pack application no longer forces the Busy role just to display its artwork. The clarification below establishes the request as explicit Apply feedback, rather than a demonstrated missing Busy mapping during OS waiting.
+
+### Explicit Apply progress
+
+The user clarified that Busy should appear while changing/applying a pack. The app now displays explicit app-local progress and loading artwork, using a captured selection, while snapshot preparation and serialized native registration run off the UI thread. Busy is preferred, then Working, with native progress as the final fallback. Cancel requests restoration after the in-flight native step; full Quit defers until cleanup. An interrupted Apply cannot reactivate after lock/return. See [Apply feedback and cancellation](APPLY_PROGRESS.md).
+
+The safe suite passed with Anya and Son Goku, including injected registration barriers that prove main-actor responsiveness, duplicate prevention, success/error cleanup, cancellation, Quit waiting, and lock interruption with no late activation. Native Anya Apply/Restore verified all 53 baseline slots again. The old live check's five-second worker/recovery deadlines expired under load; worker readiness was observed at 10.49 seconds. Both test waits are now bounded at 20 seconds with phase-specific diagnostics. The complete passing run measured worker readiness at **6.09 s** and verified SIGKILL recovery/journal removal at **6.03 s**. Production watchdog startup/recovery logic was not weakened or bypassed.
+
+Immediate native screenshots captured **Applying Anya…**, the static Busy artwork, an indeterminate indicator, disabled editing/Apply, and **Cancel and restore**. A real ⌘⇧R during Apply ended at **Cursor change cancelled. System pointer restored.** with preview paused. Anya was then reapplied at the user's Small size, ending with **12 roles across 53 system slots**. Actual menu-bar Quit during an in-flight Apply and physical sleep during Apply remain untested; fake state checks do not replace those observations.
 
 ## Resource measurements
 
@@ -71,7 +80,7 @@ Native recovery check, only with the app's current pack restored and no competin
 
 ## Local candidate
 
-`rtk proxy zsh scripts/package-local-candidate.sh "$PWD/.build/quiet-registration/Octapuss.app"` produces `.build/local-candidate/Octapuss-0.1.0-local-arm64.zip` with a SHA-256 file, source revision, validation report, and recovery instructions alongside it. Imported artwork is not bundled. The package is experimental, locally signed, and not notarized; its existence does not close the acceptance gates below.
+`rtk proxy zsh scripts/package-local-candidate.sh "$PWD/.build/apply-progress/Octapuss.app"` produces `.build/local-candidate/Octapuss-0.1.0-local-arm64.zip` with a SHA-256 file, source revision, validation report, and recovery instructions alongside it. Imported artwork is not bundled. The package is experimental, locally signed, and not notarized; its existence does not close the acceptance gates below.
 
 ## Remaining acceptance gates
 

@@ -305,14 +305,15 @@ struct CursorJournal: Codable {
 }
 
 /// Journaled native cursor slots. No pointer hiding or privileged installation.
-@MainActor
-final class SystemCursorSession {
+final class SystemCursorSession: @unchecked Sendable {
     let journalURL: URL
     private let api: SystemCursorAccess
     private var watchdog: Process?
     private var lifeline: Pipe?
+    // All instance mutations, including synchronous recovery callers, share this queue.
+    private let operations = DispatchQueue(label: "dev.octapuss.cursor-session", qos: .userInitiated)
 
-    nonisolated static var defaultJournalURL: URL {
+    static var defaultJournalURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Octapuss/system-arrow-session.json")
     }
@@ -325,8 +326,35 @@ final class SystemCursorSession {
     var hasPendingRecovery: Bool { FileManager.default.fileExists(atPath: journalURL.path) }
 
     func apply(_ replacements: [CursorSnapshot], startWatchdog: Bool = true) throws {
-        try Self.withJournalLock(journalURL) {
-            try applyLocked(replacements, startWatchdog: startWatchdog)
+        try operations.sync {
+            try Self.withJournalLock(journalURL) {
+                try applyLocked(replacements, startWatchdog: startWatchdog)
+            }
+        }
+    }
+
+    func replaceAsync(_ replacements: [CursorSnapshot], startWatchdog: Bool = true) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            operations.async {
+                do {
+                    try Self.withJournalLock(self.journalURL) {
+                        try self.prepareForApplicationLocked()
+                        try self.applyLocked(replacements, startWatchdog: startWatchdog)
+                    }
+                    continuation.resume()
+                } catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
+
+    func restoreAsync() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            operations.async {
+                do {
+                    try Self.withJournalLock(self.journalURL) { try self.restoreLocked() }
+                    continuation.resume()
+                } catch { continuation.resume(throwing: error) }
+            }
         }
     }
 
@@ -352,20 +380,28 @@ final class SystemCursorSession {
     }
 
     func restore() throws {
-        try Self.withJournalLock(journalURL) { try restoreLocked() }
+        try operations.sync {
+            try Self.withJournalLock(journalURL) { try restoreLocked() }
+        }
     }
 
     /// Explicit Apply accepts externally changed cursors as the next baseline.
     /// Restore anything still owned first, and retain the old backup for inspection.
     func prepareForApplication() throws {
-        try Self.withJournalLock(journalURL) {
-            do { try restoreLocked() }
-            catch CursorSystemError.ownershipChanged {
-                let archive = journalURL.deletingLastPathComponent()
-                    .appendingPathComponent("system-arrow-backup-\(UUID().uuidString).json")
-                try FileManager.default.moveItem(at: journalURL, to: archive)
-                closeWatchdog()
+        try operations.sync {
+            try Self.withJournalLock(journalURL) {
+                try prepareForApplicationLocked()
             }
+        }
+    }
+
+    private func prepareForApplicationLocked() throws {
+        do { try restoreLocked() }
+        catch CursorSystemError.ownershipChanged {
+            let archive = journalURL.deletingLastPathComponent()
+                .appendingPathComponent("system-arrow-backup-\(UUID().uuidString).json")
+            try FileManager.default.moveItem(at: journalURL, to: archive)
+            closeWatchdog()
         }
     }
 

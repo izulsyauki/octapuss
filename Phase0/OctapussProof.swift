@@ -120,6 +120,12 @@ final class ProofStore: ObservableObject {
     @Published private(set) var systemNeedsRecovery = false
     @Published private(set) var systemColorOverride = false
     private var systemSession: SystemCursorSession?
+    private let systemAccessOverride: SystemCursorAccess?
+    @Published private(set) var isApplying = false
+    @Published private(set) var applyingCursor: ImportedCursor?
+    private var applyingName = ""
+    private var cancelApplyRequested = false
+    private var applyTask: Task<Void, Never>?
     private var cursorContinuation = CursorContinuation()
     private var resumeTask: Task<Void, Never>?
     private var recoveredOnLaunch = false
@@ -146,7 +152,7 @@ final class ProofStore: ObservableObject {
         guard let set = selectedCollection else { return false }
         return set.cursors.count > 1 || set.cursors.first?.effectiveRole != nil
     }
-    var applyActionTitle: String { appliesPack ? "Apply pack" : "Apply system arrow" }
+    var applyActionTitle: String { isApplying ? "Applying…" : (appliesPack ? "Apply pack" : "Apply system arrow") }
     var selectedPackPlan: CursorPackPlan { CursorPackPlan(cursors: selectedCollection?.cursors ?? []) }
 
     func assignSelectedRole(_ choice: String) {
@@ -162,9 +168,12 @@ final class ProofStore: ObservableObject {
         } catch { diagnostic = "The role could not be saved: \(error.localizedDescription)" }
     }
 
-    init(defaults: UserDefaults = .standard, allowsSystemCustomization: Bool = true, libraryURL: URL? = nil) {
+    init(defaults: UserDefaults = .standard, allowsSystemCustomization: Bool = true, libraryURL: URL? = nil,
+         systemAccess: SystemCursorAccess? = nil, systemJournalURL: URL = SystemCursorSession.defaultJournalURL) {
         self.defaults = defaults
         self.allowsSystemCustomization = allowsSystemCustomization
+        systemAccessOverride = systemAccess
+        if let systemAccess { systemSession = SystemCursorSession(api: systemAccess, journalURL: systemJournalURL) }
         pack = PointerPack(rawValue: defaults.string(forKey: "selectedPack") ?? "") ?? .ink
         pointerSize = PointerSize(rawValue: defaults.string(forKey: "pointerSize") ?? "") ?? .medium
         darkPreview = defaults.bool(forKey: "darkPreview")
@@ -345,6 +354,7 @@ final class ProofStore: ObservableObject {
     }
 
     var statusTitle: String {
+        if isApplying { return cancelApplyRequested ? "Restoring pointer…" : "Applying \(applyingName)…" }
         if systemNeedsRecovery { return "System restoration needed" }
         if systemColorOverride { return "Pointer color override" }
         if systemApplied { return "System \(systemAppliedAsPack ? "pack" : "arrow"): \(systemAppliedLabel)" }
@@ -360,65 +370,101 @@ final class ProofStore: ObservableObject {
     }
 
     func applySystemArrow() {
-        guard allowsSystemCustomization else { return }
-        systemColorOverride = PointerColorCompatibility.hasOverride()
+        guard !isApplying, allowsSystemCustomization || systemAccessOverride != nil else { return }
+        systemColorOverride = systemAccessOverride == nil && PointerColorCompatibility.hasOverride()
         guard !systemColorOverride else {
             diagnostic = "macOS pointer colors override themes. In System Settings > Accessibility > Display > Pointer, choose Reset Colors, then Apply."
             return
         }
-        var transactionStarted = false
+        let plan = appliesPack ? selectedPackPlan : nil
+        let imported = selectedImportedCursor
+        let size = pointerSize
+        let title = selectedCollection?.name ?? selectedTitle
+        let label = plan == nil ? "\(selectedTitle) · \(size.title)" : title
+        let override = systemAccessOverride
         do {
             if systemSession == nil { systemSession = try SystemCursorSession(api: SystemCursorAPI()) }
             guard let session = systemSession else { return }
-            var packResult: (snapshots: [CursorSnapshot], roleCount: Int, unavailable: [String])?
-            if appliesPack { packResult = try selectedPackPlan.replacements(using: SystemCursorAPI(), size: pointerSize.points) }
-            let names = ["com.apple.coregraphics.Arrow", "com.apple.coregraphics.ArrowS"]
-            var replacements: [CursorSnapshot] = []
-            for name in packResult == nil ? names : [] {
-                // ArrowS is required on the host macOS 26. Older systems may omit it.
-                if name.hasSuffix("ArrowS"), ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 {
-                    continue
-                }
-                if let imported = selectedImportedCursor {
-                    replacements.append(try imported.snapshot(name: name, longestSide: pointerSize.points))
-                    continue
-                }
-                let images = try [1.0, 2.0, 5.0, 10.0].map { scale -> Data in
-                    let image = PointerArtwork.pointerImage(pack: pack, size: pointerSize.points * scale)
-                    guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-                          let png = NSBitmapImageRep(cgImage: cgImage).representation(using: .png, properties: [:]) else {
-                        throw CursorSystemError.invalidBaseline
+            var arrows: [CursorSnapshot] = []
+            if plan == nil {
+                for name in CursorRole.arrow.slotNames.filter({ $0.hasPrefix("com.apple.coregraphics.") }) {
+                    if let imported {
+                        arrows.append(try imported.snapshot(name: name, longestSide: size.points))
+                    } else {
+                        let images = try [1.0, 2.0, 5.0, 10.0].map { scale -> Data in
+                            let image = PointerArtwork.pointerImage(pack: pack, size: size.points * scale)
+                            guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+                                  let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else {
+                                throw CursorSystemError.invalidBaseline
+                            }
+                            return png
+                        }
+                        arrows.append(CursorSnapshot(name: name, width: size.points, height: size.points,
+                            x: size.points / 16, y: size.points / 16, frames: 1, duration: 0, images: images))
                     }
-                    return png
                 }
-                replacements.append(CursorSnapshot(name: name, width: pointerSize.points, height: pointerSize.points,
-                                                   x: pointerSize.points / 16, y: pointerSize.points / 16,
-                                                   frames: 1, duration: 0, images: images))
             }
-            if let result = packResult { replacements = result.snapshots }
-            transactionStarted = true
+            let fallback = arrows
+            applyingName = title
+            applyingCursor = plan?.mapped.first { $0.effectiveRole == .busy }
+                ?? plan?.mapped.first { $0.effectiveRole == .working }
+            cancelApplyRequested = false
+            isApplying = true
+            diagnostic = "Applying \(title). You can cancel and restore your pointer."
             resumeTask?.cancel()
             resumeTask = nil
-            cursorContinuation.cancel()
-            try session.prepareForApplication()
-            systemApplied = false
-            try session.apply(replacements)
-            cursorContinuation.applied(replacements)
-            systemApplied = true
-            previewEnabled = true
-            systemAppliedAsPack = packResult != nil
-            systemAppliedLabel = packResult.map { "\(selectedCollection?.name ?? selectedTitle) · \($0.roleCount) roles" }
-                ?? "\(selectedTitle) · \(pointerSize.title)"
-            systemNeedsRecovery = false
-            if let result = packResult {
-                let skipped = selectedPackPlan.unmapped.count + result.unavailable.count
-                diagnostic = "Pack applied: \(result.roleCount) roles across \(result.snapshots.count) system slots."
-                    + (skipped > 0 ? " \(skipped) files/roles have no matching system slot; they remain unchanged." : "")
-            } else { diagnostic = "System arrow applied. Import a named cursor set to customize other roles." }
-        } catch {
-            if transactionStarted { systemNeedsRecovery = systemSession?.hasPendingRecovery ?? false }
-            diagnostic = error.localizedDescription
-        }
+            applyTask = Task { [self] in
+                defer {
+                    applyingCursor = nil
+                    applyTask = nil
+                    isApplying = false
+                }
+                var transactionStarted = false
+                do {
+                    let result = try await Task.detached(priority: .userInitiated) {
+                        if let plan {
+                            let api: SystemCursorAccess
+                            if let override { api = override } else { api = try SystemCursorAPI() }
+                            return try plan.replacements(using: api, size: size.points)
+                        }
+                        return (snapshots: fallback, roleCount: 0, unavailable: [String]())
+                    }.value
+                    try Task.checkCancellation()
+                    cursorContinuation.cancel()
+                    transactionStarted = true
+                    systemApplied = false
+                    try await session.replaceAsync(result.snapshots, startWatchdog: override == nil)
+                    try Task.checkCancellation()
+                    cursorContinuation.applied(result.snapshots)
+                    systemApplied = true
+                    previewEnabled = true
+                    systemAppliedAsPack = plan != nil
+                    systemAppliedLabel = plan == nil ? label : "\(title) · \(result.roleCount) roles"
+                    systemNeedsRecovery = false
+                    if let plan {
+                        let skipped = plan.unmapped.count + result.unavailable.count
+                        diagnostic = "Pack applied: \(result.roleCount) roles across \(result.snapshots.count) system slots."
+                            + (skipped > 0 ? " \(skipped) files/roles have no matching system slot; they remain unchanged." : "")
+                    } else { diagnostic = "System arrow applied. Import a named cursor set to customize other roles." }
+                } catch {
+                    if cancelApplyRequested || Task.isCancelled {
+                        do {
+                            try await session.restoreAsync()
+                            systemApplied = false
+                            systemNeedsRecovery = false
+                            previewEnabled = false
+                            diagnostic = "Cursor change cancelled. System pointer restored."
+                        } catch {
+                            systemNeedsRecovery = true
+                            diagnostic = "Restoration incomplete: \(error.localizedDescription)"
+                        }
+                    } else {
+                        if transactionStarted { systemNeedsRecovery = session.hasPendingRecovery }
+                        diagnostic = error.localizedDescription
+                    }
+                }
+            }
+        } catch { diagnostic = error.localizedDescription }
     }
 
     func recordClick() {
@@ -430,6 +476,13 @@ final class ProofStore: ObservableObject {
         resumeTask?.cancel()
         resumeTask = nil
         cursorContinuation.cancel()
+        if isApplying {
+            cancelApplyRequested = true
+            applyTask?.cancel()
+            previewEnabled = false
+            diagnostic = "Finishing the current registration step, then restoring your pointer…"
+            return
+        }
         restoreRegistrations()
     }
 
@@ -452,6 +505,11 @@ final class ProofStore: ObservableObject {
     }
 
     func suspendSystemCursor(for reason: CursorContinuation.Suspension) {
+        if isApplying {
+            _ = cursorContinuation.suspend(reason)
+            restore()
+            return
+        }
         resumeTask?.cancel()
         resumeTask = nil
         let shouldRestore = cursorContinuation.suspend(reason)
@@ -475,7 +533,7 @@ final class ProofStore: ObservableObject {
     }
 
     private func reapplyRememberedCursor() {
-        guard cursorContinuation.canResume, let session = systemSession else { return }
+        guard !isApplying, cursorContinuation.canResume, let session = systemSession else { return }
         systemColorOverride = PointerColorCompatibility.hasOverride()
         guard !systemColorOverride else {
             diagnostic = "Your cursor could not resume because macOS pointer colors override themes. Reset Colors, then Apply again."
@@ -510,7 +568,7 @@ final class ProofStore: ObservableObject {
 
     func prepareToQuit() -> Bool {
         restore()
-        return !systemNeedsRecovery
+        return !isApplying && !systemNeedsRecovery
     }
 }
 
@@ -859,7 +917,8 @@ struct CursorPreviewBridge: NSViewRepresentable {
     func updateNSView(_ view: CursorPreviewNSView, context: Context) {
         view.onClick = { store.recordClick() }
         view.configure(pack: store.pack, size: store.pointerSize, dark: store.darkPreview,
-                       enabled: store.previewEnabled, clicks: store.clickCount, imported: store.selectedImportedCursor)
+                       enabled: store.previewEnabled || store.isApplying, clicks: store.clickCount,
+                       imported: store.isApplying ? store.applyingCursor : store.selectedImportedCursor)
     }
 
     static func dismantleNSView(_ view: CursorPreviewNSView, coordinator: ()) {
@@ -934,7 +993,7 @@ struct SettingsView: View {
                     .foregroundStyle(Color(nsColor: AppPalette.tide))
                 Text("Apply pack changes every assigned and available macOS cursor role. Unassigned roles, app-drawn cursors, protected prompts, and Windows-only roles can differ. Single unnamed cursor imports change the arrow only.")
                     .foregroundStyle(.secondary)
-                Button(store.applyActionTitle) { store.applySystemArrow() }
+                Button(store.applyActionTitle) { store.applySystemArrow() }.disabled(store.isApplying)
                 Button("Restore system pointer") { store.restore() }
                 if store.systemColorOverride {
                     Text("Your custom macOS pointer colors override registered themes. Choose Accessibility > Display > Pointer > Reset Colors in System Settings, then Apply again.")
@@ -954,7 +1013,7 @@ struct SettingsView: View {
             }
             Button("Reset preferences") {
                 store.resetPreferences()
-            }
+            }.disabled(store.isApplying)
         }
         .formStyle(.grouped)
         .padding()
@@ -970,8 +1029,10 @@ struct ProofCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("Import cursor files…") { store.chooseCursorFiles() }
                 .keyboardShortcut("o", modifiers: .command)
+                .disabled(store.isApplying)
             Button("Import unzipped set folder…") { store.chooseCursorFiles(asFolder: true) }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+                .disabled(store.isApplying)
         }
         CommandGroup(after: .appInfo) {
             Button("Restore system pointer") { store.restore() }
@@ -987,6 +1048,7 @@ final class ProofAppDelegate: NSObject, NSApplicationDelegate {
     }
     private var lifecycleObservers = Set<AnyCancellable>()
     private var explicitQuitRequested = false
+    private var pendingTermination = false
 
     func keepRunningInMenuBar() {
         for window in NSApplication.shared.windows { window.orderOut(nil) }
@@ -1021,7 +1083,15 @@ final class ProofAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func observeCursorLifecycle() {
-        guard store != nil, lifecycleObservers.isEmpty else { return }
+        guard let store, lifecycleObservers.isEmpty else { return }
+        store.$isApplying.dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] applying in
+                guard !applying, let self, self.pendingTermination, let store = self.store else { return }
+                self.pendingTermination = false
+                let restored = store.prepareToQuit()
+                if !restored { self.showMainWindow() }
+                NSApplication.shared.reply(toApplicationShouldTerminate: restored)
+            }.store(in: &lifecycleObservers)
         let workspace = NSWorkspace.shared.notificationCenter
         let distributed = DistributedNotificationCenter.default()
         let events: [(NotificationCenter, Notification.Name, CursorContinuation.Suspension, Bool)] = [
@@ -1063,6 +1133,11 @@ final class ProofAppDelegate: NSObject, NSApplicationDelegate {
             return .terminateCancel
         }
         guard let store else { return .terminateNow }
+        if store.isApplying {
+            pendingTermination = true
+            store.restore()
+            return .terminateLater
+        }
         guard store.prepareToQuit() else {
             showMainWindow()
             return .terminateCancel
@@ -1110,7 +1185,7 @@ struct OctapussProofApp: App {
                 appDelegate.showMainWindow()
                 openWindow(id: "main")
             }
-            Button(store.applyActionTitle) { store.applySystemArrow() }
+            Button(store.applyActionTitle) { store.applySystemArrow() }.disabled(store.isApplying)
             Menu("Pointer pal") {
                 ForEach(PointerPack.allCases) { pack in
                     Button {
@@ -1124,7 +1199,7 @@ struct OctapussProofApp: App {
                         }
                     }
                 }
-            }
+            }.disabled(store.isApplying)
             Button("Restore system pointer") { store.restore() }
             if !store.previewEnabled {
                 Button("Resume local preview") { store.resumePreview() }
