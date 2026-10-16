@@ -1,12 +1,9 @@
 import AppKit
 import SwiftUI
 
-// Native library · playful-operate · set list + cursor contact sheet.
-// Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5
-
 @MainActor
 struct CursorLibraryView: View {
-    @EnvironmentObject private var store: ProofStore
+    @EnvironmentObject private var store: AppStore
     @Environment(\.openSettings) private var openSettings
     @State private var search = ""
     @State private var packToDelete: CursorCollection?
@@ -289,7 +286,7 @@ struct CursorLibraryView: View {
                 }
                 Button(store.isApplying ? "Cancel and restore" : "Restore system pointer") { store.restore() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
-                Button(store.applyActionTitle) { store.applySystemArrow() }
+                Button(store.applyActionTitle) { store.applySelectedCursor() }
                     .buttonStyle(.borderedProminent)
                     .disabled(store.isApplying)
             }
@@ -430,34 +427,5 @@ private struct CursorTile: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 12))
         .help("\(title) · \(detail)")
-    }
-}
-
-enum NativeCursorSample: String, CaseIterable, Identifiable {
-    case text, link, crosshair, openHand, closedHand, horizontalResize, verticalResize, unavailable
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .text: "Text"
-        case .link: "Link"
-        case .crosshair: "Precision"
-        case .openHand: "Open hand"
-        case .closedHand: "Grab"
-        case .horizontalResize: "Resize sideways"
-        case .verticalResize: "Resize up / down"
-        case .unavailable: "Unavailable"
-        }
-    }
-    var cursor: NSCursor {
-        switch self {
-        case .text: .iBeam
-        case .link: .pointingHand
-        case .crosshair: .crosshair
-        case .openHand: .openHand
-        case .closedHand: .closedHand
-        case .horizontalResize: .resizeLeftRight
-        case .verticalResize: .resizeUpDown
-        case .unavailable: .operationNotAllowed
-        }
     }
 }

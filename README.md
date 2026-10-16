@@ -77,6 +77,10 @@ The script prints `/tmp/octapuss-phase0/Octapuss.app`. It uses the locally insta
 
 Run focused regression checks with `rtk proxy zsh scripts/build-phase0.sh --check`. These exercise the real native view and isolated preferences; they are executable checks, not an XCTest suite.
 
+Production code lives in `Octapuss/`, separated into application workflows, Foundation-only models, UI features, native platform integration, and persistence. `AppStore` coordinates the UI; dedicated controllers own the library and cursor runtime. See [architecture and extension guidelines](docs/ARCHITECTURE.md) for where to make changes. Run `rtk proxy python3 scripts/check-architecture.py` to check dependency rules and Xcode/CLI source membership before submitting changes. Saved packs, preference keys and recovery journals retain their existing formats.
+
+The [refactor verification report](docs/REFACTOR_VERIFICATION.md) records baseline/post-change checks, storage and concurrency regression cases, render evidence, and remaining limitations.
+
 `Octapuss.xcodeproj` contains the shared Octapuss app scheme. With full Xcode selected, use `xcodebuild -project Octapuss.xcodeproj -scheme Octapuss build CODE_SIGNING_ALLOWED=NO`. Full Xcode is unavailable on this host, so that route and XCTest execution remain **untested**. See [repair verification](docs/REPAIR_VERIFICATION.md) for the exact evidence and limits.
 
 See [the measured Phase 0 result](docs/FEASIBILITY_RESULTS.md) before choosing the next backend.

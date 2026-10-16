@@ -32,7 +32,7 @@ No login item is installed. Protected macOS cursors can remain native.
 Read VALIDATION.md for passed checks and remaining acceptance gates.
 NOTE
 git -C "$project_root" rev-parse HEAD > "$output_root/SOURCE-REVISION.txt"
-if [[ -n "$(git -C "$project_root" diff --name-only -- Phase0 scripts)" ]]; then
+if [[ -n "$(git -C "$project_root" status --porcelain --untracked-files=all -- Octapuss Octapuss.xcodeproj scripts)" ]]; then
     print 'Built with uncommitted source changes; see the stability milestone commit.' >> "$output_root/SOURCE-REVISION.txt"
 fi
 print "$archive"

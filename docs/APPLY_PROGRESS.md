@@ -14,7 +14,7 @@ The user requested explicit Busy feedback while applying a pack. This is separat
 
 ## Implementation boundary
 
-ProofStore captures immutable Apply input on the main actor. Artwork decoding/pack snapshot preparation runs in a detached task. SystemCursorSession confines instance mutations, helper lifetime and native writes to one private serial queue. Async replacement holds the journal lock across reconciliation and new application. Synchronous recovery callers use the same queue; the existing generation UUID protects against an old watchdog.
+AppStore captures a CursorApplicationRequest for CursorSessionController on the main actor. Artwork decoding/pack snapshot preparation runs in a detached task. SystemCursorSession confines instance mutations, helper lifetime and native writes to one private serial queue. Async replacement holds the journal lock across reconciliation and new application. Synchronous recovery callers use the same queue; the existing generation UUID protects against an old watchdog.
 
 The `@unchecked Sendable` session annotation is justified by that queue confinement; mutable session state must not be accessed outside its operation methods. `hasPendingRecovery` only reads journal existence. Images are decoded into private bitmap contexts without background NSView drawing. Main-actor state publication and app-local animation remain separate from native registrations.
 

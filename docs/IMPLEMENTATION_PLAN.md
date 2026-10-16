@@ -12,6 +12,7 @@ Updated 16 October 2026. The selected product is a native macOS cursor-pack util
 | 3: Engine and recovery | Full-pack Apply, durable journal, ownership checks, rollback, helper, suspension/resumption implemented | Physical lifecycle and workspace matrix |
 | 4: Persistence and guidance | Local library/preferences, explicit Apply, recovery/color diagnostics, preview pause implemented | Complete keyboard and VoiceOver workflows |
 | 5: Local beta verification | In progress | Performance, manual matrix, toolchain and support evidence |
+| Maintainability | Refactored into focused production layers and state owners; storage/native interfaces and architecture gate added | Preserve boundaries and regression proof as features grow; see [verification](REFACTOR_VERIFICATION.md) |
 | External distribution | Deferred until candidate verification and signing | Developer ID, hardened-runtime compatibility, notarization, Gatekeeper |
 
 ## Stability milestone

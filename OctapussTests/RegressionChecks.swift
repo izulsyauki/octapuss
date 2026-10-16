@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import CoreServices
 import SwiftUI
 
@@ -13,7 +14,7 @@ struct RegressionChecks {
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set("missing-pack", forKey: "selectedPack")
         defaults.set("missing-size", forKey: "pointerSize")
-        let store = ProofStore(defaults: defaults, allowsSystemCustomization: false)
+        let store = AppStore(defaults: defaults, allowsSystemCustomization: false)
         defaults.set(["red": 1, "green": 1, "blue": 1, "alpha": 1], forKey: "cursorOutline")
         defaults.set(["red": 0, "green": 0, "blue": 0, "alpha": 1], forKey: "cursorFill")
         precondition(!PointerColorCompatibility.hasOverride(in: defaults))
@@ -25,7 +26,7 @@ struct RegressionChecks {
         store.pack = .blush
         store.pointerSize = .large
         store.darkPreview = true
-        let reloaded = ProofStore(defaults: defaults, allowsSystemCustomization: false)
+        let reloaded = AppStore(defaults: defaults, allowsSystemCustomization: false)
         precondition(reloaded.pack == .blush && reloaded.pointerSize == .large && reloaded.darkPreview,
                      "Appearance preferences must survive reopening")
 
@@ -69,6 +70,7 @@ struct RegressionChecks {
         precondition(store.prepareToQuit() && !store.previewEnabled)
         checkPreviewAnimationLifecycle()
         checkPreviewCursorBoundary()
+        checkLibraryOwnership()
         view.onClick = nil
         checkSystemTransactions()
         do { try CursorImportChecks.run() }
@@ -78,6 +80,57 @@ struct RegressionChecks {
         await checkApplyBusyLifecycle()
         checkMenuBarLifecycle(store: store)
         print("Regression checks completed: preferences, 9 cursor variants, 3 layout sizes, 20 clicks, repeated Restore, reset, and quit.")
+    }
+
+    @MainActor
+    static func checkLibraryOwnership() {
+        let suite = "octapuss-library-boundary-\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let first = ImportedCursor(id: UUID(), name: "First", png: Data(), width: 32, height: 32,
+            hotspotX: 0, hotspotY: 0, firstFrameOnly: false)
+        let other = ImportedCursor(id: UUID(), name: "Other", png: Data(), width: 32, height: 32,
+            hotspotX: 0, hotspotY: 0, firstFrameOnly: false)
+        defaults.set(first.id.uuidString, forKey: "selectedImportedCursor")
+        let storage = MemoryCursorLibrary(cursors: [first, other])
+        let store = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryStorage: storage)
+        var updates = 0
+        let observer = store.objectWillChange.sink { updates += 1 }
+        defer { observer.cancel() }
+        storage.rejectSave = true
+        store.assignSelectedRole(CursorRole.busy.rawValue)
+        precondition(store.selectedImportedCursor?.roleOverride == nil && storage.cursors[0].roleOverride == nil,
+                     "Failed saves must not publish an unsaved role")
+        precondition(store.diagnostic.contains("could not be saved"), "Library diagnostics must reach the UI coordinator")
+        storage.rejectSave = false
+        let beforeEdit = updates
+        store.assignSelectedRole(CursorRole.busy.rawValue)
+        precondition(store.selectedImportedCursor?.effectiveRole == .busy && updates > beforeEdit,
+                     "Nested library changes must notify views observing AppStore")
+        store.deleteCursorPack(id: first.id)
+        precondition(store.importedCursors.count == 1 && store.selectedImportedID == other.id)
+        precondition(store.lastDeletedPack?.id == first.id)
+        storage.rejectSave = true
+        store.undoPackDeletion()
+        precondition(store.importedCursors.count == 1 && store.lastDeletedPack?.id == first.id,
+                     "Failed Undo must retain its recovery data")
+        storage.rejectSave = false
+        store.undoPackDeletion()
+        precondition(store.importedCursors.count == 2 && store.selectedImportedID == first.id)
+        precondition(store.selectedImportedCursor?.effectiveRole == .busy && store.lastDeletedPack == nil)
+        precondition(defaults.string(forKey: "selectedImportedCursor") == first.id.uuidString,
+                     "Restored selection must retain the existing preference format")
+        store.pack = .tide
+        precondition(store.selectedImportedID == nil && store.importedCursors.count == 2)
+
+        storage.rejectLoad = true
+        let unavailable = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryStorage: storage)
+        let savedCount = storage.saveCount
+        unavailable.importCursorFiles([])
+        precondition(unavailable.importedCursors.isEmpty && storage.saveCount == savedCount,
+                     "A failed load must not make the existing library writable as an empty collection")
+        precondition(unavailable.diagnostic.contains("unavailable"))
+        print("Library ownership checks passed: injected storage, publish forwarding, failed save/Undo/load, selection and preference compatibility.")
     }
 
     @MainActor
@@ -99,13 +152,13 @@ struct RegressionChecks {
             busy.roleOverride = CursorRole.busy.rawValue
             busy.animation = CursorAnimation(frames: [png, png], durations: [0.1, 0.1])
             let libraryURL = root.appendingPathComponent("library.json")
-            try CursorLibrary(url: libraryURL).save([arrow, busy])
+            try JSONCursorLibrary(url: libraryURL).save([arrow, busy])
             defaults.set(arrow.id.uuidString, forKey: "selectedImportedCursor")
             let names = CursorRole.arrow.slotNames + CursorRole.busy.slotNames
             let baseline = try names.map { try arrow.snapshot(name: $0, longestSide: 24) }
             let api = BlockingCursorAPI(snapshots: baseline)
             let journal = root.appendingPathComponent("session.json")
-            let store = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL,
+            let store = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL,
                                    systemAccess: api, systemJournalURL: journal)
             func waitFor(_ condition: () -> Bool) async {
                 let deadline = Date().addingTimeInterval(8)
@@ -115,19 +168,29 @@ struct RegressionChecks {
                 }
                 preconditionFailure("Async cursor operation timed out")
             }
-            store.applySystemArrow()
+            store.applySelectedCursor()
             precondition(store.isApplying && store.applyingCursor?.id == busy.id)
             precondition(store.statusTitle == "Applying Busy test…")
             await waitFor { api.entered.wait(timeout: .now()) == .success }
             // Main-actor continuations still execute while native registration is blocked.
             precondition(store.isApplying && !store.systemApplied)
-            store.applySystemArrow() // Duplicate input must not queue another operation.
+            store.pack = .blush
+            store.pointerSize = .large
+            precondition(store.applyingCursor?.id == busy.id,
+                         "Browsing must not replace the captured loading artwork")
+            store.applySelectedCursor() // Duplicate input must not queue another operation.
             api.proceed.signal()
             await waitFor { !store.isApplying }
             precondition(store.systemApplied && store.applyingCursor == nil)
+            precondition(store.systemAppliedLabel == "Busy test · 2 roles")
+            let capturedArrow = try api.base.read(names[0])
+            precondition(capturedArrow.width == PointerSize.medium.points,
+                         "Apply must use the captured size, not a later selection")
+            store.selectedImportedID = arrow.id
+            store.pointerSize = .medium
 
             api.blockNextWrite = true
-            store.applySystemArrow()
+            store.applySelectedCursor()
             await waitFor { api.entered.wait(timeout: .now()) == .success }
             store.restore()
             precondition(store.isApplying && store.statusTitle == "Restoring pointer…")
@@ -138,13 +201,13 @@ struct RegressionChecks {
             try api.base.verifyAll(baseline)
 
             api.base.failNextWriteFor = names[0]
-            store.applySystemArrow()
+            store.applySelectedCursor()
             await waitFor { !store.isApplying }
             precondition(!store.systemApplied && !store.systemNeedsRecovery && store.applyingCursor == nil)
             try api.base.verifyAll(baseline)
 
             api.blockNextWrite = true
-            store.applySystemArrow()
+            store.applySelectedCursor()
             await waitFor { api.entered.wait(timeout: .now()) == .success }
             precondition(!store.prepareToQuit(), "Quit must wait for in-flight Apply cleanup")
             api.proceed.signal()
@@ -152,7 +215,7 @@ struct RegressionChecks {
             precondition(store.prepareToQuit() && !store.systemApplied)
             try api.base.verifyAll(baseline)
             api.blockNextWrite = true
-            store.applySystemArrow()
+            store.applySelectedCursor()
             await waitFor { api.entered.wait(timeout: .now()) == .success }
             store.suspendSystemCursor(for: .lock)
             store.resumeSystemCursor(after: .lock)
@@ -212,7 +275,11 @@ struct RegressionChecks {
         NSCursor.iBeam.set()
         view.cursorUpdate(with: event)
         precondition(NSCursor.current === NSCursor.iBeam, "An inactive preview cannot claim the cursor")
-        print("Preview boundary checks passed: exit, late updates, text cursor, hide, detach, outside-window and inactive ownership.")
+        view.setFrameOrigin(NSPoint(x: 1_000, y: 1_000))
+        view.updateTrackingAreas()
+        view.resetCursorRects()
+        precondition(view.trackingAreas.isEmpty, "A fully clipped preview must register no cursor tracking region")
+        print("Preview boundary checks passed: exit, late updates, text cursor, hide, detach, outside-window, inactive ownership and fully clipped geometry.")
     }
 
     @MainActor
@@ -254,8 +321,8 @@ struct RegressionChecks {
     }
 
     @MainActor
-    static func checkMenuBarLifecycle(store: ProofStore) {
-        let delegate = ProofAppDelegate()
+    static func checkMenuBarLifecycle(store: AppStore) {
+        let delegate = OctapussAppDelegate()
         delegate.store = store
         let app = NSApplication.shared
         store.resumePreview()
@@ -400,6 +467,26 @@ final class AnimationCheckWindow: NSWindow {
     override var isKeyWindow: Bool { testKey }
     override var isVisible: Bool { testVisible }
     override var occlusionState: NSWindow.OcclusionState { testVisible ? [.visible] : [] }
+}
+
+final class MemoryCursorLibrary: CursorLibraryStorage {
+    var cursors: [ImportedCursor]
+    var rejectLoad = false
+    var rejectSave = false
+    private(set) var saveCount = 0
+
+    init(cursors: [ImportedCursor]) { self.cursors = cursors }
+
+    func load() throws -> [ImportedCursor] {
+        if rejectLoad { throw CursorImportError.invalid("Storage unavailable") }
+        return cursors
+    }
+
+    func save(_ cursors: [ImportedCursor]) throws {
+        saveCount += 1
+        if rejectSave { throw CursorImportError.invalid("Storage unavailable") }
+        self.cursors = cursors
+    }
 }
 
 final class BlockingCursorAPI: SystemCursorAccess {

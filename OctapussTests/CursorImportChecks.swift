@@ -86,13 +86,13 @@ enum CursorImportChecks {
         let suite = "octapuss-import-\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+        let store = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
         store.importCursorFiles([file])
         precondition(store.importedCursors.count == 1 && store.selectedImportedCursor != nil && !store.systemApplied)
         let id = store.selectedImportedID
         store.importCursorFiles([file])
         precondition(store.importedCursors.count == 1 && store.selectedImportedID == id, "Reimport must deduplicate")
-        let reopened = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+        let reopened = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
         precondition(reopened.selectedImportedID == id && reopened.importedCursors.count == 1)
         try FileManager.default.removeItem(at: file)
         precondition(reopened.selectedImportedCursor!.image(longestSide: 32).isValid, "Library must be independent of Downloads")
@@ -101,7 +101,7 @@ enum CursorImportChecks {
         reopened.selectedImportedID = id
         reopened.removeSelectedImport()
         precondition(reopened.importedCursors.isEmpty && reopened.selectedImportedID == nil)
-        let empty = try CursorLibrary(url: libraryURL).load()
+        let empty = try JSONCursorLibrary(url: libraryURL).load()
         precondition(empty.isEmpty)
 
         // Existing libraries had no collection keys: retain them as single-cursor sets.
@@ -109,7 +109,7 @@ enum CursorImportChecks {
         legacy[0].removeValue(forKey: "collectionID")
         legacy[0].removeValue(forKey: "collectionName")
         try JSONSerialization.data(withJSONObject: legacy).write(to: libraryURL)
-        let migrated = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+        let migrated = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
         precondition(migrated.cursorCollections.count == 1 && migrated.cursorCollections[0].id == decoded.id)
 
         let setFolder = directory.appendingPathComponent("Synthetic cursor set")
@@ -138,7 +138,7 @@ enum CursorImportChecks {
         migrated.removeSelectedImport()
         precondition(migrated.selectedCollection?.id == set.id && migrated.selectedCollection?.cursors.count == 3,
                      "Removing one cursor must keep the rest of its set selected")
-        let reloadedSets = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+        let reloadedSets = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
         precondition(reloadedSets.selectedCollection?.id == set.id && reloadedSets.selectedCollection?.cursors.count == 3)
 
         let beforeDeletion = reloadedSets.importedCursors
@@ -153,12 +153,12 @@ enum CursorImportChecks {
         precondition(reloadedSets.selectedImportedID != beforeSelection)
         precondition(FileManager.default.fileExists(atPath: setFolder.appendingPathComponent("Arrow.cur").path),
                      "Deleting a pack must leave the original files untouched")
-        let deletedSaved = try CursorLibrary(url: libraryURL).load()
+        let deletedSaved = try JSONCursorLibrary(url: libraryURL).load()
         precondition(!deletedSaved.contains { $0.setID == set.id }, "Whole-pack deletion must survive relaunch")
         reloadedSets.undoPackDeletion()
         precondition(Set(reloadedSets.importedCursors.map(\.id)) == Set(beforeDeletion.map(\.id)))
         precondition(reloadedSets.selectedImportedID == beforeSelection && reloadedSets.lastDeletedPack == nil)
-        let restored = try CursorLibrary(url: libraryURL).load()
+        let restored = try JSONCursorLibrary(url: libraryURL).load()
         precondition(restored.first { $0.id == set.cursors[0].id }?.effectiveRole == .copy,
                      "Undo must restore manual assignments and original cursor IDs")
         reloadedSets.undoPackDeletion()
@@ -176,7 +176,7 @@ enum CursorImportChecks {
         precondition(reloadedSets.importedCursors.count == beforeDeletion.count && reloadedSets.lastDeletedPack == nil,
                      "A failed save must leave the pack and Undo state unchanged")
         try FileManager.default.removeItem(at: libraryURL)
-        try CursorLibrary(url: libraryURL).save(beforeDeletion)
+        try JSONCursorLibrary(url: libraryURL).save(beforeDeletion)
         print("Pack deletion checks passed: whole set, unrelated packs, original files, persistence, Undo, selection, failed save.")
 
         if let path = ProcessInfo.processInfo.environment["OCTAPUSS_IMPORT_FIXTURE_DIR"] {

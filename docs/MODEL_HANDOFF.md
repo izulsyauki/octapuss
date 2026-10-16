@@ -1,6 +1,6 @@
 # Handoff after the Phase 0 proof
 
-**Latest user direction, 15 October 2026:** system-arrow customization outside Octapuss is now requested. Read `docs/SYSTEM_CURSOR.md` and `Phase0/SystemCursorBackend.swift` before using the older app-local handoff below. Preserve baseline backup, explicit Apply/Restore, the independent preview, and crash recovery; never substitute an overlay for native registration.
+**Current implementation, 16 October 2026:** the app supports native cursor-pack customization. Source now lives in `Octapuss/`; read `docs/ARCHITECTURE.md`, `docs/SYSTEM_CURSOR.md`, and `Octapuss/Platform/SystemCursor/SystemCursorSession.swift` before using the older app-local handoff below. Preserve baseline backup, explicit Apply/Restore, the independent preview, and crash recovery; never substitute an overlay for native registration.
 
 The native Phase 0 feasibility app is implemented, and the user selected app-local customization as the product direction on 1 October 2026. The 15 October behavioral repair is recorded in `docs/REPAIR_VERIFICATION.md`; read it alongside the historical `docs/FEASIBILITY_RESULTS.md` before continuing.
 

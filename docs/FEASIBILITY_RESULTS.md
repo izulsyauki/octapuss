@@ -12,6 +12,8 @@ The user selected **app-local customization** on 1 October 2026. The product can
 
 ## Built proof
 
+The paths below describe the historical proof. Current production source is organized under `Octapuss/`; see [architecture](ARCHITECTURE.md). Bundle metadata is now `Octapuss/Resources/Info.plist`.
+
 - Source: `Phase0/OctapussProof.swift`
 - Bundle metadata: `Phase0/Info.plist`
 - Reproducible builder: `scripts/build-phase0.sh`

@@ -14,7 +14,7 @@ struct LibraryRenderChecks {
         defer { defaults.removePersistentDomain(forName: suite) }
         let libraryURL = root.appendingPathComponent("test-library.json")
         defer { try? FileManager.default.removeItem(at: libraryURL) }
-        let store = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+        let store = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
         let packPath = ProcessInfo.processInfo.environment["OCTAPUSS_RENDER_PACK_PATH"] ?? "/tmp/octapuss-import-fixtures"
         let packURL = URL(fileURLWithPath: packPath)
         if packURL.pathExtension.lowercased() == "cursor" { store.importCursorFiles([packURL]) }

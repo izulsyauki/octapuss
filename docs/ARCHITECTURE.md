@@ -1,30 +1,64 @@
 # Octapuss architecture
 
-Current implementation, 16 October 2026. SwiftUI/AppKit macOS utility; no web runtime, network service, account, database, or third-party runtime dependency. Source remains in `Phase0/`; this directory name does not mean the app is still planning-only.
+Current implementation, 16 October 2026. Native SwiftUI/AppKit macOS utility, with one application target and no third-party runtime dependencies. Production source lives in `Octapuss/`; `Phase0/` has been retired. The existing builder name remains compatible with local workflows.
 
 ```mermaid
 flowchart TD
-    UI[Library / Settings / menu bar] --> S[ProofStore: selection and runtime]
-    S --> I[CursorFileDecoder / CursorLibrary]
-    S --> P[CursorPackPlan: roles and snapshots]
-    S --> C[CursorContinuation: suspension intent]
-    S --> B[SystemCursorSession: transaction and ownership]
-    P --> B
-    B --> J[Atomic journal + file lock]
-    B --> H[Background reader / recovery helper]
-    B --> API[Dynamic private cursor API]
-    UI --> V[Independent AppKit playground]
-    S --> D[Local preferences and imported artwork]
+    UI[Library / Settings / menu bar] --> S[AppStore: UI coordination]
+    S --> L[CursorLibraryController]
+    S --> R[CursorSessionController]
+    L --> Storage[CursorLibraryStorage protocol]
+    JSON[JSONCursorLibrary] -. implements .-> Storage
+    R --> Request[Captured CursorApplicationRequest]
+    R --> Session[SystemCursorSession]
+    Session --> Access[SystemCursorAccess protocol]
+    API[SystemCursorAPI] -. implements .-> Access
+    Session --> Journal[Atomic journal + file lock]
+    Session --> Helper[Background reader / recovery helper]
+    UI --> Preview[Independent AppKit playground]
 ```
 
-| Source | Responsibility |
+## Source ownership
+
+| Directory | Responsibility |
 | --- | --- |
-| `Phase0/OctapussProof.swift` | Store, native preview/artwork, Settings, commands, app delegate/scenes |
-| `Phase0/CursorLibraryView.swift` | Set library, gallery, role inspector, delete/Undo, action bar |
-| `Phase0/CursorImport.swift` | Bounded CUR/ANI/native-theme parsing, normalized artwork, JSON library |
-| `Phase0/CursorRoles.swift` | Conservative matching, overrides, conflicts, pack planning |
-| `Phase0/SystemCursorBackend.swift` | API boundary, independent reads, verification, transactions/recovery, continuation |
-| `OctapussTests/` | Isolated executable checks, view fixtures, helper and opt-in live recovery checks |
+| `Octapuss/App/` | Entry point, helper-mode dispatch, scenes, commands, Dock/menu-bar and macOS lifecycle integration |
+| `Octapuss/Application/` | UI coordination, library edits, Apply/cancel/resume workflows, captured requests, storage and native-access interfaces |
+| `Octapuss/Models/` | Foundation-only cursor data, roles, filenames, sizes, snapshots and suspension intent |
+| `Octapuss/Features/` | SwiftUI library, Settings, preview bridge and shared visual components |
+| `Octapuss/Platform/Import/` | Native import panel, bounded CUR/ANI/theme decoding and AppKit image conversion |
+| `Octapuss/Platform/Preview/` | Native playground view, cursor rectangles, animation timer and native cursor samples |
+| `Octapuss/Platform/SystemCursor/` | macOS slot aliases, pack snapshot assembly, dynamic ABI access, verification, serialized transactions and helper runtime |
+| `Octapuss/Persistence/` | Typed preferences, application-support paths, validated JSON artwork storage and durable journal schema |
+| `Octapuss/Resources/` | Main app and background-helper bundle metadata |
+| `OctapussTests/` | Isolated executable checks, view fixtures, helper checks and opt-in native recovery checks |
+
+## State and dependency rules
+
+- **One owner per responsibility.** The library controller owns imported items, selection, role edits and deletion/Undo. The cursor controller owns the applied effect, in-flight work, cancellation, recovery and suspension intent. AppStore owns presentation preferences, clicks and the latest diagnostic; it forwards controller changes to SwiftUI rather than copying their state.
+- **Capture intent before async work.** CursorApplicationRequest is an immutable value. Selection, pack or size changes after Apply cannot replace its snapshots, loading artwork or applied label.
+- **Persist before publishing.** Library edits save through CursorLibraryStorage before replacing the in-memory collection. A failed save leaves selection and deletion recovery intact. A failed initial load leaves storage unavailable to prevent replacing the saved library with an empty one.
+- **Use narrow interfaces at side effects.** JSONCursorLibrary implements CursorLibraryStorage; SystemCursorAPI implements SystemCursorAccess. Tests inject memory storage and a fake registry. Additional interfaces should follow a concrete need rather than wrap every value or function.
+- **Keep platform rendering out of models.** ImportedCursor and CursorSnapshot retain their existing Codable schemas. AppKit images, PNG normalization, cursor construction, native animation sampling and pixel comparison live in platform extensions. Foundation-only models can be typechecked on their own.
+- **Keep views out of persistence and native writes.** Views issue AppStore commands. Native file selection belongs to CursorImportPanel, parsing to CursorFileDecoder, and registry operations to the backend.
+- **Preserve concurrency ownership.** UI and controller state is main-actor isolated. SystemCursorSession is marked unchecked Sendable because its instance mutations are confined to its serial operations queue; do not access its mutable API/helper state outside that queue.
+- **Keep preview independent.** The playground remains usable without activating the native backend. Its pointer ownership is bounded to the visible portion of its actual bounds.
+
+These are source boundaries within one target, not independently packaged modules. Native preparation still uses concrete platform services where there is one implementation. There is no dependency container framework, network layer, generic repository hierarchy or speculative plugin system.
+
+## Extending the app
+
+| Change | Start here | Relevant proof |
+| --- | --- | --- |
+| Import format | Platform/Import/CursorFileDecoder.swift | CursorImportChecks |
+| Cursor role or native alias | Models/CursorRole.swift and Platform/SystemCursor/CursorRole+SystemSlots.swift | CursorPackChecks |
+| Library edit or storage implementation | Application/CursorLibraryController.swift and CursorLibraryStorage | Injected-storage and deletion/Undo checks |
+| Apply, cancellation or suspension | Application/CursorSessionController.swift | Blocking-registry lifecycle and continuation checks |
+| Recovery ownership or private API | Platform/SystemCursor/SystemCursorSession.swift and SystemCursorAPI.swift | Transaction tests, then authorized live recovery check |
+| Preview behavior | Platform/Preview/CursorPreviewNSView.swift | Boundary, animation, hit-test and render checks |
+| Visual layout | Features/Library or Features/Settings | Offscreen fixtures and native accessibility checks |
+
+Add each new Swift file to the Xcode target. The Command Line Tools builder discovers production Swift files recursively; `python3 scripts/check-architecture.py` checks that Xcode compiles the same files exactly once, along with basic dependency rules and executable metadata. CI runs this gate before Xcode compilation. Do not add test entry points to the production source tree.
 
 ## Ownership and recovery
 

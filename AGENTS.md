@@ -2,9 +2,9 @@
 
 ## Project Structure & Module Organization
 
-Octapuss has an independent app-local preview and an experimental native cursor-pack backend. Source is in `Phase0/`, including `CursorRoles.swift`, with an app target in `Octapuss.xcodeproj`. Read `docs/UI_REDESIGN.md` for the library/gallery design, `docs/SYSTEM_CURSOR.md` for backend safety, `docs/CURSOR_IMPORT.md` for imports, and `docs/FULL_PACKS.md` for current role mapping, animation, and measured limits. `docs/REPAIR_VERIFICATION.md` records the earlier local repair.
+Octapuss has an independent app-local preview and an experimental native cursor-pack backend. Production source is in `Octapuss/`, with an app target in `Octapuss.xcodeproj`. Read `docs/ARCHITECTURE.md` for ownership and dependency rules, `docs/UI_REDESIGN.md` for the library/gallery design, `docs/SYSTEM_CURSOR.md` for backend safety, `docs/CURSOR_IMPORT.md` for imports, and `docs/FULL_PACKS.md` for role mapping, animation, and measured limits.
 
-When implementation begins, follow the proposed layout: `Octapuss/App`, `Features`, `Cursor`, `Platform`, `Models`, `Persistence`, and `Resources`, with focused tests in `OctapussTests`. Keep the app-local preview independent from any across-app cursor backend.
+Use `Octapuss/App` for process lifecycle, `Application` for workflows and interfaces, `Features` for SwiftUI, `Models` for Foundation-only data, `Platform` for AppKit and native integration, `Persistence` for storage, and `Resources` for metadata. Keep the app-local preview independent from the across-app cursor backend. AppStore coordinates the UI; CursorLibraryController and CursorSessionController own their state. Preserve existing Codable fields, preference keys, journal ownership and queue isolation during refactors.
 
 ## Build, Test, and Development Commands
 
@@ -15,6 +15,8 @@ xcodebuild -project Octapuss.xcodeproj -scheme Octapuss build
 ```
 
 With Command Line Tools, run `rtk proxy zsh scripts/build-phase0.sh`; add `--check` for safe/fake regression checks, `--render-library` for offscreen app-only visual fixtures (see `docs/UI_REDESIGN.md`), or `--probe-system` for read-only private API probing. `--check-system-live` intentionally changes system arrow registrations temporarily and kills only its own worker to test recovery; run it only for an authorized integration check. No XCTest target exists. Do not claim Xcode/XCTest validation from the Command Line Tools path. Global pointer hiding and overlays remain excluded.
+
+Run `rtk proxy python3 scripts/check-architecture.py` after source changes. Add new Swift files to the Xcode target; this gate rejects source membership drift and basic boundary violations. The local builder discovers production sources recursively and retains its historical filename for compatibility.
 
 ## Coding Style & Naming Conventions
 

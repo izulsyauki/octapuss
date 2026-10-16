@@ -104,13 +104,13 @@ enum CursorPackChecks {
             let defaults = UserDefaults(suiteName: suite)!
             let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json")
             defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: url) }
-            let store = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: url)
+            let store = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: url)
             store.importCursorFiles([URL(fileURLWithPath: path)])
             precondition(store.selectedCollection?.name == "Anya" && store.importedCursors.count == 13)
             let ids = Set(store.importedCursors.map(\.id))
             store.importCursorFiles([URL(fileURLWithPath: path)])
             precondition(store.importedCursors.count == 13 && Set(store.importedCursors.map(\.id)) == ids)
-            let savedTheme = try CursorLibrary(url: url).load()
+            let savedTheme = try JSONCursorLibrary(url: url).load()
             precondition(savedTheme.count == 13)
             let slots = Set(theme.cursors.flatMap(\.targetSlotNames))
             let api = FakeSystemCursorAPI(snapshots: try slots.map { try first.snapshot(name: $0, longestSide: 32) })
@@ -230,13 +230,13 @@ enum CursorPackChecks {
             let defaults = UserDefaults(suiteName: suite)!
             let libraryURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json")
             defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: libraryURL) }
-            let store = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+            let store = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
             store.importCursorFolder(directory)
             precondition(store.selectedCollection?.cursors.count == 15 && store.selectedPackPlan.mapped.count == 13)
             let cursor = store.importedCursors.first { $0.effectiveRole == .text }!
             store.selectedImportedID = cursor.id
             store.assignSelectedRole(CursorRole.openHand.rawValue)
-            let reopened = ProofStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
+            let reopened = AppStore(defaults: defaults, allowsSystemCustomization: false, libraryURL: libraryURL)
             precondition(reopened.selectedImportedCursor?.effectiveRole == .openHand,
                          "Manual roles must persist and override filename detection")
             reopened.assignSelectedRole("unassigned")

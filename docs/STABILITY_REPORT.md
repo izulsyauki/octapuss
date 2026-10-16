@@ -63,6 +63,10 @@ Native regression checks passed for leaving the playground, delayed updates outs
 
 The repaired local build passed helper packaging and strict signature verification. The previous app's system pointer was restored before stopping its process. The UI automation launch timed out repeatedly, so reopening the repaired app and reapplying Anya could not be confirmed in this run.
 
+### Maintainability refactor
+
+Production code now lives under `Octapuss/`, with separate UI coordination, library ownership, cursor lifecycle, Foundation-only models, native integration and persistence. Baseline and post-refactor safe suites passed, including new injected-storage/observation and captured-Apply checks. The local build, helper, signature, architecture gate and 12 offscreen render fixtures passed. Rendering exposed and verified a fix for a null cursor rectangle when the playground is fully clipped. See [refactor evidence and limitations](REFACTOR_VERIFICATION.md) and [architecture rules](ARCHITECTURE.md).
+
 ## Resource measurements
 
 Method: `scripts/measure-resources.py` samples only an explicitly selected Octapuss PID using cumulative process CPU time and RSS. Ten-second intervals, 11 samples each; percent is relative to one CPU core. CPU time has centisecond resolution (about 0.1 percentage point over these intervals), so displayed zero means no measurable CPU-time delta, not proof of absolutely no work. Helpers are not included in these parent-process samples. No pointer coordinates, input, screenshots, or unrelated process activity are recorded.
@@ -90,7 +94,7 @@ Native recovery check, only with the app's current pack restored and no competin
 
 ## Local candidate
 
-`rtk proxy zsh scripts/package-local-candidate.sh "$PWD/.build/preview-boundary/Octapuss.app"` produces `.build/local-candidate/Octapuss-0.1.0-local-arm64.zip` with a SHA-256 file, source revision, validation report, and recovery instructions alongside it. Imported artwork is not bundled. The package is experimental, locally signed, and not notarized; its existence does not close the acceptance gates below.
+`rtk proxy zsh scripts/package-local-candidate.sh "$PWD/.build/architecture/Octapuss.app"` produces `.build/local-candidate/Octapuss-0.1.0-local-arm64.zip` with a SHA-256 file, source revision, validation report, and recovery instructions alongside it. Imported artwork is not bundled. The package is experimental, locally signed, and not notarized; its existence does not close the acceptance gates below.
 
 ## Remaining acceptance gates
 

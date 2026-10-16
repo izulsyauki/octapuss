@@ -28,6 +28,8 @@ jobs:
           swift --version
           sw_vers
           uname -m
+      - name: Check architecture and source membership
+        run: python3 scripts/check-architecture.py
       - name: Build Release with Xcode
         run: >-
           xcodebuild -project Octapuss.xcodeproj -scheme Octapuss
