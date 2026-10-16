@@ -1,4 +1,5 @@
 import AppKit
+import CoreServices
 import SwiftUI
 
 /// Runs against the same source as the app, with isolated preferences and real native views.
@@ -72,7 +73,33 @@ struct RegressionChecks {
         catch { preconditionFailure(error.localizedDescription) }
         do { try CursorPackChecks.run() }
         catch { preconditionFailure(error.localizedDescription) }
+        checkMenuBarLifecycle(store: store)
         print("Regression checks completed: preferences, 9 cursor variants, 3 layout sizes, 20 clicks, repeated Restore, reset, and quit.")
+    }
+
+    @MainActor
+    static func checkMenuBarLifecycle(store: ProofStore) {
+        let delegate = ProofAppDelegate()
+        delegate.store = store
+        let app = NSApplication.shared
+        store.resumePreview()
+        precondition(delegate.terminationReply(for: nil, explicitlyRequested: false) == .terminateCancel)
+        precondition(store.previewEnabled, "Dock Quit must keep the cursor session running")
+        precondition(!delegate.applicationShouldTerminateAfterLastWindowClosed(app))
+        precondition(delegate.terminationReply(for: nil, explicitlyRequested: true) == .terminateNow)
+        precondition(!store.previewEnabled, "Menu-bar Quit must run cursor restoration")
+
+        for reason in [kAEQuitAll, kAEShutDown, kAERestart, kAEReallyLogOut, kAELogOut] {
+            let event = NSAppleEventDescriptor(eventClass: AEEventClass(kCoreEventClass),
+                eventID: AEEventID(kAEQuitApplication), targetDescriptor: nil,
+                returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID))
+            event.setAttribute(NSAppleEventDescriptor(enumCode: OSType(reason)), forKeyword: AEKeyword(kAEQuitReason))
+            store.resumePreview()
+            precondition(delegate.terminationReply(for: event, explicitlyRequested: false) == .terminateNow,
+                         "System logout/shutdown must not be intercepted as Dock Quit")
+            precondition(!store.previewEnabled, "System termination must restore the cursor")
+        }
+        print("Menu-bar lifecycle checks passed: Dock Quit retains preview, last-window close keeps running, explicit/system Quit restores cursor.")
     }
 
     @MainActor

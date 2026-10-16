@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CoreServices
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -948,6 +949,39 @@ final class ProofAppDelegate: NSObject, NSApplicationDelegate {
         didSet { observeCursorLifecycle() }
     }
     private var lifecycleObservers = Set<AnyCancellable>()
+    private var explicitQuitRequested = false
+
+    func keepRunningInMenuBar() {
+        for window in NSApplication.shared.windows { window.orderOut(nil) }
+        NSApplication.shared.setActivationPolicy(.accessory)
+    }
+
+    func showMainWindow() {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.regular)
+        if let window = app.windows.first(where: { $0.title == "Octapuss" }) {
+            window.deminiaturize(nil)
+            window.makeKeyAndOrderFront(nil)
+        }
+        app.activate(ignoringOtherApps: true)
+    }
+
+    func quitFromMenuBar() {
+        explicitQuitRequested = true
+        NSApplication.shared.terminate(nil)
+        // A failed cursor restoration cancels Quit, allowing a later retry.
+        explicitQuitRequested = false
+    }
+
+    static func isSystemTermination(_ event: NSAppleEventDescriptor?) -> Bool {
+        let keyword = AEKeyword(kAEQuitReason)
+        guard let reason = (event?.attributeDescriptor(forKeyword: keyword)
+                            ?? event?.paramDescriptor(forKeyword: keyword))?.enumCodeValue else {
+            return false
+        }
+        return [kAEQuitAll, kAEShutDown, kAERestart, kAEReallyLogOut, kAELogOut]
+            .contains { reason == OSType($0) }
+    }
 
     private func observeCursorLifecycle() {
         guard store != nil, lifecycleObservers.isEmpty else { return }
@@ -982,8 +1016,28 @@ final class ProofAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        terminationReply(for: NSAppleEventManager.shared().currentAppleEvent,
+                         explicitlyRequested: explicitQuitRequested)
+    }
+
+    func terminationReply(for event: NSAppleEventDescriptor?, explicitlyRequested: Bool) -> NSApplication.TerminateReply {
+        guard explicitlyRequested || Self.isSystemTermination(event) else {
+            keepRunningInMenuBar()
+            return .terminateCancel
+        }
         guard let store else { return .terminateNow }
-        return store.prepareToQuit() ? .terminateNow : .terminateCancel
+        guard store.prepareToQuit() else {
+            showMainWindow()
+            return .terminateCancel
+        }
+        return .terminateNow
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showMainWindow()
+        return true
     }
 }
 
@@ -1006,12 +1060,19 @@ struct OctapussProofApp: App {
         .defaultSize(width: 1080, height: 760)
         .commands {
             ProofCommands(store: store)
+            CommandGroup(replacing: .appTermination) {
+                Button("Keep Running in Menu Bar") { NSApplication.shared.terminate(nil) }
+                    .keyboardShortcut("q", modifiers: .command)
+            }
         }
 
         MenuBarExtra("Octapuss", systemImage: "cursorarrow.rays") {
             Text(store.statusTitle)
             Divider()
-            Button("Open Octapuss") { openWindow(id: "main") }
+            Button("Open Octapuss") {
+                appDelegate.showMainWindow()
+                openWindow(id: "main")
+            }
             Button(store.applyActionTitle) { store.applySystemArrow() }
             Menu("Pointer pal") {
                 ForEach(PointerPack.allCases) { pack in
@@ -1032,12 +1093,13 @@ struct OctapussProofApp: App {
                 Button("Resume local preview") { store.resumePreview() }
             }
             Divider()
-            Button("Settings…") { openSettings() }
+            Button("Settings…") {
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                openSettings()
+            }
                 .keyboardShortcut(",", modifiers: .command)
             Button("Quit Octapuss") {
-                if store.prepareToQuit() {
-                    NSApplication.shared.terminate(nil)
-                }
+                appDelegate.quitFromMenuBar()
             }
         }
 
