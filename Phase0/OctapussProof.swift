@@ -642,6 +642,8 @@ final class CursorPreviewNSView: NSView {
     private var animationCursors: [NSCursor] = []
     private var animationPortraits: [NSImage] = []
     private var animationTimer: Timer?
+    private var animationObservers = Set<AnyCancellable>()
+    var isAnimationRunning: Bool { animationTimer != nil }
     private var animationStartedAt = 0.0
     private var animationIndex = 0
 
@@ -703,11 +705,46 @@ final class CursorPreviewNSView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         stopAnimation()
+        animationObservers.removeAll()
+        guard window != nil else { return }
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
+                     NSWindow.didMiniaturizeNotification, NSWindow.didDeminiaturizeNotification,
+                     NSWindow.didChangeOcclusionStateNotification] {
+            NotificationCenter.default.publisher(for: name)
+                .sink { [weak self] notification in
+                    guard let self, notification.object as? NSWindow === self.window else { return }
+                    self.refreshAnimation()
+                }
+                .store(in: &animationObservers)
+        }
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshAnimation() }
+            .store(in: &animationObservers)
         startAnimationIfNeeded()
     }
 
+    override func viewDidHide() {
+        super.viewDidHide()
+        stopAnimation()
+    }
+
+    override func viewDidUnhide() {
+        super.viewDidUnhide()
+        startAnimationIfNeeded()
+    }
+
+    private func refreshAnimation() {
+        stopAnimation()
+        startAnimationIfNeeded()
+    }
+
+    deinit { animationTimer?.invalidate() }
+
     private func startAnimationIfNeeded() {
-        guard customEnabled, window != nil, animationCursors.count > 1,
+        guard animationTimer == nil, customEnabled, let window, window.isKeyWindow,
+              window.isVisible, !window.isMiniaturized, window.occlusionState.contains(.visible),
+              !isHiddenOrHasHiddenAncestor, animationCursors.count > 1,
               !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
         animationStartedAt = Date.timeIntervalSinceReferenceDate
         let timer = Timer(timeInterval: max(1.0 / 60, min(animationDurations.min() ?? 0.1, 0.1)), repeats: true) { [weak self] _ in

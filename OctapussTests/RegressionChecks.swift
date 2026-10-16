@@ -67,6 +67,7 @@ struct RegressionChecks {
         precondition(store.pack == .ink && store.pointerSize == .medium && !store.darkPreview)
         precondition(store.clickCount == 0 && !store.previewEnabled, "Reset must preserve paused state")
         precondition(store.prepareToQuit() && !store.previewEnabled)
+        checkPreviewAnimationLifecycle()
         view.onClick = nil
         checkSystemTransactions()
         do { try CursorImportChecks.run() }
@@ -75,6 +76,44 @@ struct RegressionChecks {
         catch { preconditionFailure(error.localizedDescription) }
         checkMenuBarLifecycle(store: store)
         print("Regression checks completed: preferences, 9 cursor variants, 3 layout sizes, 20 clicks, repeated Restore, reset, and quit.")
+    }
+
+    @MainActor
+    static func checkPreviewAnimationLifecycle() {
+        let window = AnimationCheckWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 225),
+                                          styleMask: [.titled], backing: .buffered, defer: false)
+        let view = CursorPreviewNSView(frame: window.contentView!.bounds)
+        window.contentView = view
+        let image = PointerArtwork.pointerImage(pack: .ink, size: 32)
+        let bitmap = NSBitmapImageRep(cgImage: image.cgImage(forProposedRect: nil, context: nil, hints: nil)!)
+        let png = bitmap.representation(using: .png, properties: [:])!
+        let cursor = ImportedCursor(id: UUID(), name: "Animated test", png: png, width: 32, height: 32,
+                                    hotspotX: 2, hotspotY: 2, firstFrameOnly: false,
+                                    animation: CursorAnimation(frames: [png, png], durations: [0.1, 0.1]))
+        view.configure(pack: .ink, size: .medium, dark: false, enabled: true, clicks: 0, imported: cursor)
+        let motionAllowed = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        precondition(view.isAnimationRunning == motionAllowed)
+        window.testKey = false
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: window)
+        precondition(!view.isAnimationRunning, "Inactive previews must stop their timer")
+        window.testKey = true
+        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: window)
+        precondition(view.isAnimationRunning == motionAllowed)
+        view.isHidden = true
+        precondition(!view.isAnimationRunning, "Hidden previews must stop their timer")
+        view.isHidden = false
+        precondition(view.isAnimationRunning == motionAllowed)
+        window.testVisible = false
+        NotificationCenter.default.post(name: NSWindow.didChangeOcclusionStateNotification, object: window)
+        precondition(!view.isAnimationRunning, "Occluded previews must stop their timer")
+        window.testVisible = true
+        NotificationCenter.default.post(name: NSWindow.didChangeOcclusionStateNotification, object: window)
+        precondition(view.isAnimationRunning == motionAllowed)
+        view.configure(pack: .ink, size: .medium, dark: false, enabled: false, clicks: 0, imported: cursor)
+        precondition(!view.isAnimationRunning, "Restore must stop preview animation")
+        window.contentView = nil
+        precondition(!view.isAnimationRunning, "Detached previews must stop their timer")
+        print("Preview animation checks passed: inactive, hidden, occluded, Restore, detach, and resume.")
     }
 
     @MainActor
@@ -171,6 +210,14 @@ struct RegressionChecks {
             let newBaselineRestored = try api.read("arrow").matches(external)
             precondition(newBaselineRestored, "Restore must use the new system baseline after Reset Colors")
             precondition(!session.hasPendingRecovery)
+            let cycleStart = Date()
+            for _ in 0..<100 {
+                try session.apply(applied, startWatchdog: false)
+                try session.restore()
+                precondition(!session.hasPendingRecovery)
+                try api.verifyAll([external, original[1]])
+            }
+            print("100 fake Apply/Restore cycles passed in \(String(format: "%.2f", Date().timeIntervalSince(cycleStart))) seconds; baseline and journal cleanup verified each cycle.")
             var continuation = CursorContinuation()
             continuation.applied(applied)
             try session.apply(applied, startWatchdog: false)
@@ -205,6 +252,15 @@ struct RegressionChecks {
             print("System transaction checks completed: baseline recovery, partial rollback, idempotent Restore, ownership conflict.")
         } catch { preconditionFailure(error.localizedDescription) }
     }
+}
+
+@MainActor
+final class AnimationCheckWindow: NSWindow {
+    var testKey = true
+    var testVisible = true
+    override var isKeyWindow: Bool { testKey }
+    override var isVisible: Bool { testVisible }
+    override var occlusionState: NSWindow.OcclusionState { testVisible ? [.visible] : [] }
 }
 
 final class FakeSystemCursorAPI: SystemCursorAccess {
